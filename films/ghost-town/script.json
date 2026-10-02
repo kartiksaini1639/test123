@@ -1,0 +1,120 @@
+{
+  "title": "Ghost Town",
+  "topic": "How Kanye West's Ghost Town turns a forgotten 1960s song into a portrait of a man waiting to be free",
+  "style_seed": "mixed-media paper collage, abandoned desert ghost town at dusk, vintage vinyl records and reel-to-reel tape, illuminated-manuscript and engraved-bible fragments, deep indigo night sky over aged cream paper",
+  "accent_color": "#D4A017",
+  "beats": [
+    {
+      "id": 1,
+      "narration": "The first voice you hear on Ghost Town isn't Kanye's. It belongs to a woman almost nobody has heard of.",
+      "visual": "A 1960s seven-inch vinyl single as a large paper cutout at center, its label blank and faded, set on a dusty ghost-town main street at dusk, a single faceless silhouette of a man standing small at the far end of the street",
+      "caption_text": "GHOST TOWN",
+      "motion": "slow push-in on the record, dust drifts left along the street, the record turns very slowly"
+    },
+    {
+      "id": 2,
+      "narration": "Her name is Shirley Ann Lee. In the late nineteen-sixties, she records a short song called Someday. Then it sits on a shelf for forty years.",
+      "visual": "A reel-to-reel tape box labeled 'SOMEDAY' sitting on a dusty archive shelf among stacked boxes, cobwebs, a calendar strip of torn pages running from 1968 to 2008 across the frame",
+      "caption_text": "40 YEARS",
+      "motion": "calendar pages slide in from right and settle one by one, faint dust shimmer, slight parallax between shelf and boxes"
+    },
+    {
+      "id": 3,
+      "narration": "To understand why Kanye builds a song around her voice, you have to go back much further. To the Book of Revelation.",
+      "visual": "An old engraved bible page cutout opened to Revelation, ink-etched text texture, a torn edge revealing indigo night sky behind it",
+      "caption_text": null,
+      "motion": "slow pull-out revealing the full page, the page edge lifts slightly as if in a draft"
+    },
+    {
+      "id": 4,
+      "narration": "There, a woman appears crowned with twelve stars, in the middle of danger and turmoil. She suffers. And then she is delivered.",
+      "visual": "A classical engraving-style woman in flowing robes as a paper cutout, her face turned away, a crown of twelve gold stars above her head, a storm of jagged paper clouds and a dragon silhouette around her",
+      "caption_text": "12 STARS",
+      "motion": "the twelve stars twinkle gently, storm clouds drift slowly right, subtle parallax between figure and storm"
+    },
+    {
+      "id": 5,
+      "narration": "Ghost Town runs on the same idea. Suffering isn't the end of the story. It's the price of the release that comes after.",
+      "visual": "The faceless silhouette walking down the ghost-town street toward a horizon line of gold light, broken fences and tumbleweeds on either side",
+      "caption_text": null,
+      "motion": "slow push-in toward the horizon glow, tumbleweed rolls slowly across the foreground"
+    },
+    {
+      "id": 6,
+      "narration": "Now go back even further, to Genesis. God creates for six days. On the seventh, he rests.",
+      "visual": "Seven paper panels in a row like a comic strip, six showing creation icons (light, water, land, stars, animals, a human figure), the seventh panel empty and calm with a single gold circle",
+      "caption_text": "DAY 7",
+      "motion": "panels slide in from left one at a time and settle, the seventh panel glows softly"
+    },
+    {
+      "id": 7,
+      "narration": "Kanye seems to measure his own career against that cycle. Years of creating, nonstop. And someday, finally, a seventh day.",
+      "visual": "A tall stack of vinyl records and studio tape forming a tower, the faceless silhouette at a mixing desk at its base, a distant empty hammock under a gold sun on the horizon",
+      "caption_text": null,
+      "motion": "slow upward pan along the record tower, the hammock sways gently in the distance"
+    },
+    {
+      "id": 8,
+      "narration": "Listen to how often that word comes back. Someday. Someday. Someday. A song stuck waiting for something that still hasn't happened.",
+      "visual": "The word 'SOMEDAY' repeated three times as torn magazine-letter cutouts pinned to a corkboard, a stopped clock cutout beside them",
+      "caption_text": "SOMEDAY",
+      "motion": "the three word cutouts flutter slightly in turn, clock hands stay frozen, gentle halftone shimmer"
+    },
+    {
+      "id": 9,
+      "narration": "Every repetition carries three things at once. Hope. Tension. And frustration, because whatever he wants stays just out of reach.",
+      "visual": "A faceless paper hand reaching upward toward a gold star cutout pinned just beyond its fingertips, three small labels taped beside it reading HOPE, TENSION, FRUSTRATION",
+      "caption_text": null,
+      "motion": "the star drifts upward very slightly, staying just out of reach, the hand holds still"
+    },
+    {
+      "id": 10,
+      "narration": "Here's where it gets darker. In the song, freedom looks like getting high and doing whatever he wants.",
+      "visual": "The faceless silhouette floating among drifting smoke shapes and scattered confetti cutouts above the ghost town at night, a heavy shadow shape spreading beneath him",
+      "caption_text": null,
+      "motion": "smoke drifts slowly sideways, the silhouette bobs very slightly, the shadow below holds still"
+    },
+    {
+      "id": 11,
+      "narration": "But if you have to escape constantly just to feel free, are you actually free? Probably not.",
+      "visual": "An open birdcage cutout with its door wide open, the faceless silhouette sitting inside it anyway, a gold question mark in the corner",
+      "caption_text": "FREE?",
+      "motion": "the cage door swings gently, the figure stays still, slow push-in"
+    },
+    {
+      "id": 12,
+      "narration": "That contradiction is the point. The way Kanye chases freedom is the very thing keeping him from it.",
+      "visual": "The faceless silhouette running on a looping paper road that curls back on itself like a Mobius strip, a gold exit sign always on the far side",
+      "caption_text": null,
+      "motion": "the road texture scrolls slowly in a loop while the figure holds position, subtle parallax"
+    },
+    {
+      "id": 13,
+      "narration": "Read it that way, and the song becomes Kanye talking to himself. Every escape pulls him further from who he is.",
+      "visual": "Two faceless silhouettes of the same man facing each other across a widening paper tear down the center of the frame",
+      "caption_text": null,
+      "motion": "the paper tear widens very slowly, pushing the two halves apart"
+    },
+    {
+      "id": 14,
+      "narration": "Which makes one line hit differently. Make you love me.",
+      "visual": "A torn love-letter cutout reading 'make you love me' in handwritten ink, pinned with washi tape at center, empty cream space around it",
+      "caption_text": "MAKE YOU LOVE ME",
+      "motion": "very slow push-in on the letter, its torn edge flutters slightly"
+    },
+    {
+      "id": 15,
+      "narration": "Kanye splits into two people. One, desperate to be loved. The other, the one whose love he's trying to earn. Self-love has become so foreign, it feels like courting a stranger.",
+      "visual": "The two silhouettes again, one reaching out holding a paper flower, the other turned away with arms crossed, a gold dotted line connecting their hearts that breaks in the middle",
+      "caption_text": null,
+      "motion": "the paper flower trembles slightly, the broken dotted line shimmers, slow parallax between the figures"
+    },
+    {
+      "id": 16,
+      "narration": "Shirley Ann Lee's someday came forty years late. Kanye's is still out there. Waiting for him to arrive.",
+      "visual": "Return to the ghost-town street from the opening, now at dawn, the vinyl single glowing gold at the end of the street, the faceless silhouette taking a first step toward it",
+      "caption_text": "SOMEDAY",
+      "motion": "slow pull-out to the full street, dawn light brightens gently, dust settles"
+    }
+  ]
+}
