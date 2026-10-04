@@ -22,3 +22,7 @@ Modern redesign of the Solar Face site with the same content and sections. Open 
 ## Solar Face, version 2 (`solar-face-v2/`)
 
 A second, bolder direction for the same content: Swiss-style light layout, headline above a large framed hero photo, a gapless feature grid, process columns divided by vertical lines, overlapping photos for the subsidy section, a large quote wall and a full-bleed photo behind the quote form. Motion: the "Why Solar Face?" statement darkens line by line as you scroll, and photos drift slightly slower than the page (in browsers that support scroll-driven animations). The same `verify` notes and form setup as the first redesign apply.
+
+## WordPress theme (`wordpress-theme/solar-face/`)
+
+Solar Face version 2 as an installable WordPress theme (WordPress 6.0+, PHP 7.4+). Zip the `solar-face` folder and upload it under Appearance > Themes > Add New > Upload Theme. Business details, prices and photos are editable under Appearance > Customize > Solar Face settings; quote requests and newsletter sign-ups are saved under "Enquiries" in wp-admin and emailed to you. See `wordpress-theme/solar-face/readme.txt`.

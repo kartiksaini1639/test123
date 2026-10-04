@@ -1,0 +1,124 @@
+/* Phosphor Icons (MIT), trimmed to the glyphs this page uses. */
+@font-face { font-family: "Phosphor"; src: url("./Phosphor.woff2") format("woff2"); font-display: block; }
+@font-face { font-family: "Phosphor-Fill"; src: url("./Phosphor-Fill.woff2") format("woff2"); font-display: block; }
+.ph, .ph-fill {
+  font-style: normal; font-weight: normal; font-variant: normal; text-transform: none;
+  line-height: 1; speak: never; display: inline-block;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+.ph { font-family: "Phosphor" !important; }
+.ph-fill { font-family: "Phosphor-Fill" !important; }
+.ph.ph-bank:before {
+  content: "\e0b4";
+}
+.ph.ph-currency-inr:before {
+  content: "\e558";
+}
+.ph.ph-lightning:before {
+  content: "\e2de";
+}
+.ph.ph-cloud-sun:before {
+  content: "\e540";
+}
+.ph.ph-arrow-right:before {
+  content: "\e06c";
+}
+.ph.ph-arrow-up-right:before {
+  content: "\e092";
+}
+.ph.ph-phone:before {
+  content: "\e3b8";
+}
+.ph.ph-check:before {
+  content: "\e182";
+}
+.ph.ph-caret-down:before {
+  content: "\e136";
+}
+.ph.ph-plus:before {
+  content: "\e3d4";
+}
+.ph.ph-envelope:before {
+  content: "\e214";
+}
+.ph.ph-map-pin:before {
+  content: "\e316";
+}
+.ph.ph-facebook-logo:before {
+  content: "\e226";
+}
+.ph.ph-instagram-logo:before {
+  content: "\e2d0";
+}
+.ph.ph-linkedin-logo:before {
+  content: "\e2ee";
+}
+.ph.ph-x-logo:before {
+  content: "\e4bc";
+}
+.ph.ph-whatsapp-logo:before {
+  content: "\e5d0";
+}
+.ph.ph-seal-check:before {
+  content: "\e606";
+}
+.ph.ph-certificate:before {
+  content: "\e766";
+}
+.ph.ph-quotes:before {
+  content: "\e660";
+}
+.ph.ph-list:before {
+  content: "\e2f0";
+}
+.ph.ph-x:before {
+  content: "\e4f6";
+}
+.ph.ph-file-text:before {
+  content: "\e23a";
+}
+.ph.ph-wrench:before {
+  content: "\e5d4";
+}
+.ph.ph-plug-charging:before {
+  content: "\eb5c";
+}
+.ph.ph-house:before {
+  content: "\e2c2";
+}
+.ph.ph-buildings:before {
+  content: "\e102";
+}
+.ph.ph-spinner-gap:before {
+  content: "\e66c";
+}
+.ph.ph-check-circle:before {
+  content: "\e184";
+}
+.ph.ph-warning-circle:before {
+  content: "\e4e2";
+}
+.ph.ph-calendar-check:before {
+  content: "\e712";
+}
+.ph.ph-solar-panel:before {
+  content: "\ed7a";
+}
+.ph.ph-users-three:before {
+  content: "\e68e";
+}
+.ph.ph-shield-check:before {
+  content: "\e40c";
+}
+.ph.ph-wifi-high:before {
+  content: "\e4ea";
+}
+.ph.ph-headset:before {
+  content: "\e584";
+}
+.ph.ph-sun:before {
+  content: "\e472";
+}
+.ph-fill.ph-star:before {
+  content: "\e46a";
+}
