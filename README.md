@@ -18,3 +18,7 @@ Modern redesign of the Solar Face site with the same content and sections. Open 
 - Motion: hero word reveal and photo settle, scroll reveals, count-up figures, scroll-tracked process steps, animated FAQ, header that turns solid after the hero. All of it respects reduced-motion settings.
 - Items marked `verify` in the HTML were unreadable or missing in the screenshot of the current site (process steps, FAQ answers, address, phone, email, GSTIN, social links, form options).
 - Set `data-endpoint` on the quote and newsletter forms to connect them to your backend.
+
+## Solar Face, version 2 (`solar-face-v2/`)
+
+A second, bolder direction for the same content: Swiss-style light layout, headline above a large framed hero photo, a gapless feature grid, process columns divided by vertical lines, overlapping photos for the subsidy section, a large quote wall and a full-bleed photo behind the quote form. Motion: the "Why Solar Face?" statement darkens line by line as you scroll, and photos drift slightly slower than the page (in browsers that support scroll-driven animations). The same `verify` notes and form setup as the first redesign apply.
