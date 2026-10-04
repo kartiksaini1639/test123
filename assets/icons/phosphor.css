@@ -1,0 +1,97 @@
+/* Phosphor Icons (MIT) - regular weight, trimmed to the glyphs this page uses. */
+@font-face {
+  font-family: "Phosphor";
+  src: url("./Phosphor.woff2") format("woff2");
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+.ph {
+  font-family: "Phosphor" !important;
+  speak: never;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.ph.ph-solar-panel:before {
+  content: "\ed7a";
+}
+.ph.ph-sun:before {
+  content: "\e472";
+}
+.ph.ph-house:before {
+  content: "\e2c2";
+}
+.ph.ph-buildings:before {
+  content: "\e102";
+}
+.ph.ph-battery-charging:before {
+  content: "\e0ba";
+}
+.ph.ph-lightning:before {
+  content: "\e2de";
+}
+.ph.ph-whatsapp-logo:before {
+  content: "\e5d0";
+}
+.ph.ph-phone:before {
+  content: "\e3b8";
+}
+.ph.ph-envelope:before {
+  content: "\e214";
+}
+.ph.ph-map-pin:before {
+  content: "\e316";
+}
+.ph.ph-clock:before {
+  content: "\e19a";
+}
+.ph.ph-caret-down:before {
+  content: "\e136";
+}
+.ph.ph-arrow-right:before {
+  content: "\e06c";
+}
+.ph.ph-check-circle:before {
+  content: "\e184";
+}
+.ph.ph-warning-circle:before {
+  content: "\e4e2";
+}
+.ph.ph-currency-inr:before {
+  content: "\e558";
+}
+.ph.ph-users-three:before {
+  content: "\e68e";
+}
+.ph.ph-file-text:before {
+  content: "\e23a";
+}
+.ph.ph-wrench:before {
+  content: "\e5d4";
+}
+.ph.ph-seal-check:before {
+  content: "\e606";
+}
+.ph.ph-calculator:before {
+  content: "\e538";
+}
+.ph.ph-list:before {
+  content: "\e2f0";
+}
+.ph.ph-x:before {
+  content: "\e4f6";
+}
+.ph.ph-shield-check:before {
+  content: "\e40c";
+}
+.ph.ph-plug-charging:before {
+  content: "\eb5c";
+}
+.ph.ph-spinner-gap:before {
+  content: "\e66c";
+}
