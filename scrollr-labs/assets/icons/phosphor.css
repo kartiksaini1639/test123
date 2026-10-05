@@ -1,0 +1,91 @@
+/* Phosphor Icons (MIT), regular weight, trimmed to the glyphs this page uses. */
+@font-face { font-family: "Phosphor"; src: url("./Phosphor.woff2") format("woff2"); font-display: block; }
+.ph {
+  font-family: "Phosphor" !important; font-style: normal; font-weight: normal; font-variant: normal;
+  text-transform: none; line-height: 1; speak: never; display: inline-block;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+.ph.ph-arrow-right:before {
+  content: "\e06c";
+}
+.ph.ph-arrow-up-right:before {
+  content: "\e092";
+}
+.ph.ph-browser:before {
+  content: "\e0f4";
+}
+.ph.ph-magnifying-glass:before {
+  content: "\e30c";
+}
+.ph.ph-map-pin:before {
+  content: "\e316";
+}
+.ph.ph-megaphone:before {
+  content: "\e324";
+}
+.ph.ph-check:before {
+  content: "\e182";
+}
+.ph.ph-plus:before {
+  content: "\e3d4";
+}
+.ph.ph-list:before {
+  content: "\e2f0";
+}
+.ph.ph-x:before {
+  content: "\e4f6";
+}
+.ph.ph-envelope:before {
+  content: "\e214";
+}
+.ph.ph-whatsapp-logo:before {
+  content: "\e5d0";
+}
+.ph.ph-linkedin-logo:before {
+  content: "\e2ee";
+}
+.ph.ph-instagram-logo:before {
+  content: "\e2d0";
+}
+.ph.ph-x-logo:before {
+  content: "\e4bc";
+}
+.ph.ph-spinner-gap:before {
+  content: "\e66c";
+}
+.ph.ph-warning-circle:before {
+  content: "\e4e2";
+}
+.ph.ph-check-circle:before {
+  content: "\e184";
+}
+.ph.ph-gauge:before {
+  content: "\e628";
+}
+.ph.ph-device-mobile:before {
+  content: "\e1e0";
+}
+.ph.ph-storefront:before {
+  content: "\e470";
+}
+.ph.ph-chart-line-up:before {
+  content: "\e156";
+}
+.ph.ph-calendar-check:before {
+  content: "\e712";
+}
+.ph.ph-pencil-simple-line:before {
+  content: "\ebc6";
+}
+.ph.ph-code:before {
+  content: "\e1bc";
+}
+.ph.ph-rocket-launch:before {
+  content: "\e3fe";
+}
+.ph.ph-target:before {
+  content: "\e47c";
+}
+.ph.ph-google-logo:before {
+  content: "\e292";
+}

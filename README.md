@@ -26,3 +26,7 @@ A second, bolder direction for the same content: Swiss-style light layout, headl
 ## WordPress theme (`wordpress-theme/solar-face/`)
 
 Solar Face version 2 as an installable WordPress theme (WordPress 6.0+, PHP 7.4+). Zip the `solar-face` folder and upload it under Appearance > Themes > Add New > Upload Theme. Business details, prices and photos are editable under Appearance > Customize > Solar Face settings; quote requests and newsletter sign-ups are saved under "Enquiries" in wp-admin and emailed to you. See `wordpress-theme/solar-face/readme.txt`.
+
+## scrollr labs (`scrollr-labs/`)
+
+Agency landing page built from the scrollr labs brand book: Signal Violet for actions, Lime Pop for highlights, Space Grotesk headlines and Inter body text, light and dark mode. The hero turns the logo (a scrollbar) into a window of real client sites that scrolls with the page, and the logo's lime dot tracks page scroll. Prices, the email address and social links are placeholders; set `data-endpoint` on the audit form to connect a form backend (without it the form opens an email draft).
