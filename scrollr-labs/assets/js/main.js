@@ -72,6 +72,117 @@
     reveals.forEach((el) => io.observe(el));
   }
 
+  /* ---------- Hero reel: the logo scrollbar, scrolled by the pointer ---------- */
+  const reel = document.querySelector("[data-reel]");
+  if (reel) {
+    const frame = reel.querySelector(".reel-frame");
+    const rail = reel.querySelector(".reel-rail");
+    const thumb = reel.querySelector("[data-thumb]");
+    const stages = [...reel.querySelectorAll("[data-stage]")];
+    const tabs = [...reel.querySelectorAll('[role="tab"]')];
+    const count = stages.length;
+    let active = 0;
+    let autoTimer = null;
+    let resumeTimer = null;
+    let thumbTarget = 0;
+    let thumbNow = 0;
+    let raf = 0;
+
+    const railSpan = () => rail.clientHeight - thumb.offsetHeight;
+    const stageY = (i) => (count > 1 ? (i / (count - 1)) * railSpan() : 0);
+
+    // Thumb glides toward its target (eased), like a real scrollbar thumb.
+    const animateThumb = () => {
+      thumbNow += (thumbTarget - thumbNow) * (reduceMotion ? 1 : 0.22);
+      if (Math.abs(thumbTarget - thumbNow) < 0.3) thumbNow = thumbTarget;
+      thumb.style.setProperty("--thumb-y", `${thumbNow.toFixed(1)}px`);
+      raf = thumbNow === thumbTarget ? 0 : requestAnimationFrame(animateThumb);
+    };
+    const moveThumb = (y) => {
+      thumbTarget = Math.max(0, Math.min(railSpan(), y));
+      if (!raf) raf = requestAnimationFrame(animateThumb);
+    };
+
+    const show = (index, { focus = false, fromPointer = false } = {}) => {
+      index = (index + count) % count;
+      if (index !== active) {
+        const previous = active;
+        active = index;
+        stages.forEach((stage, i) => {
+          // Only the outgoing and incoming stages slide; the rest jump silently into place.
+          stage.classList.toggle("no-anim", i !== previous && i !== active);
+          stage.classList.toggle("is-active", i === active);
+          stage.classList.toggle("is-before", i < active);
+          stage.inert = i !== active;
+        });
+        tabs.forEach((tab, i) => {
+          const on = i === active;
+          tab.setAttribute("aria-selected", String(on));
+          tab.tabIndex = on ? 0 : -1;
+        });
+      }
+      if (!fromPointer) moveThumb(stageY(active));
+      if (focus) tabs[active].focus();
+    };
+
+    // Autoplay while idle so the reel explains itself; never with reduced motion.
+    const stopAuto = () => { clearInterval(autoTimer); autoTimer = null; clearTimeout(resumeTimer); };
+    const startAuto = () => {
+      stopAuto();
+      if (reduceMotion) return;
+      autoTimer = setInterval(() => show(active + 1), 3200);
+    };
+    const pauseThenResume = (delay = 6000) => {
+      stopAuto();
+      if (!reduceMotion) resumeTimer = setTimeout(startAuto, delay);
+    };
+
+    // Mouse: vertical position over the reel scrolls through the stages.
+    frame.addEventListener("pointermove", (e) => {
+      if (e.pointerType !== "mouse") return;
+      stopAuto();
+      const box = rail.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(0.9999, (e.clientY - box.top) / box.height));
+      moveThumb(ratio * railSpan());
+      show(Math.floor(ratio * count), { fromPointer: true });
+    });
+    frame.addEventListener("pointerleave", (e) => {
+      if (e.pointerType !== "mouse") return;
+      moveThumb(stageY(active));
+      pauseThenResume(2500);
+    });
+    // Touch and pen: tap the upper or lower half to step through.
+    let lastPointer = "mouse";
+    frame.addEventListener("pointerdown", (e) => { lastPointer = e.pointerType; });
+    frame.addEventListener("click", (e) => {
+      if (lastPointer === "mouse") return;
+      const box = frame.getBoundingClientRect();
+      show(active + (e.clientY - box.top < box.height / 2 ? -1 : 1));
+      pauseThenResume();
+    });
+
+    tabs.forEach((tab, i) => tab.addEventListener("click", () => { show(i); pauseThenResume(); }));
+    reel.querySelector('[role="tablist"]').addEventListener("keydown", (e) => {
+      const keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+      if (e.key in keys) { e.preventDefault(); show(active + keys[e.key], { focus: true }); pauseThenResume(); }
+      if (e.key === "Home") { e.preventDefault(); show(0, { focus: true }); pauseThenResume(); }
+      if (e.key === "End") { e.preventDefault(); show(count - 1, { focus: true }); pauseThenResume(); }
+    });
+    reel.addEventListener("focusin", stopAuto);
+    reel.addEventListener("focusout", () => pauseThenResume(4000));
+
+    // Only cycle while the reel is on screen.
+    if (hasIO) {
+      new IntersectionObserver(([entry]) => (entry.isIntersecting ? startAuto() : stopAuto()), { threshold: 0.4 }).observe(reel);
+    } else {
+      startAuto();
+    }
+    window.addEventListener("resize", () => moveThumb(stageY(active)));
+
+    stages.forEach((stage, i) => { stage.inert = i !== 0; });
+    moveThumb(0);
+  }
+
   /* ---------- Pricing region (India / US), remembered per visitor ---------- */
   const radios = [...document.querySelectorAll("[data-region]")];
   const prices = [...document.querySelectorAll(".price [data-in]")];

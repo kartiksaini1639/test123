@@ -60,15 +60,84 @@
           </div>
         </div>
 
-        <div class="scroller rise" style="--i:2" aria-hidden="true">
-          <div class="scroller-window">
-            <div class="scroller-track">
-              <img src="assets/img/strip-solarface.jpg" alt="" width="720" height="2100">
-              <img src="assets/img/strip-arkaa.jpg" alt="" width="720" height="2100">
-              <img src="assets/img/strip-solarface-v1.jpg" alt="" width="720" height="2100">
+        <!-- Interactive reel: the logo's scrollbar, scrolled by the pointer through what we do -->
+        <div class="reel rise" style="--i:2" data-reel>
+          <div class="reel-frame">
+            <div class="reel-window" id="reel-window">
+
+              <section class="stage stage-design is-active" id="stage-design" role="tabpanel" aria-labelledby="tab-design" data-stage>
+                <div class="stage-visual" aria-hidden="true">
+                  <div class="wire">
+                    <span class="w-nav"></span>
+                    <span class="w-hero"></span>
+                    <span class="w-line w-line-1"></span>
+                    <span class="w-line w-line-2"></span>
+                    <span class="w-btn"></span>
+                    <span class="w-card w-card-1"></span>
+                    <span class="w-card w-card-2"></span>
+                  </div>
+                </div>
+                <div class="stage-copy">
+                  <h2>Design</h2>
+                  <p>Layouts built around what your customers came to do.</p>
+                </div>
+              </section>
+
+              <section class="stage stage-build" id="stage-build" role="tabpanel" aria-labelledby="tab-build" data-stage>
+                <div class="stage-visual" aria-hidden="true">
+                  <div class="gauge"><i class="ph ph-device-mobile"></i></div>
+                  <ul class="ticks">
+                    <li><i class="ph ph-check"></i>Mobile-first</li>
+                    <li><i class="ph ph-check"></i>Loads fast on 4G</li>
+                    <li><i class="ph ph-check"></i>WordPress or custom code</li>
+                  </ul>
+                </div>
+                <div class="stage-copy">
+                  <h2>Build</h2>
+                  <p>Fast sites you can update yourself, without calling a developer.</p>
+                </div>
+              </section>
+
+              <section class="stage stage-seo" id="stage-seo" role="tabpanel" aria-labelledby="tab-seo" data-stage>
+                <div class="stage-visual" aria-hidden="true">
+                  <div class="search"><i class="ph ph-magnifying-glass"></i>dentist near me</div>
+                  <ol class="ranks">
+                    <li class="rank"><span><b>1</b><b>2</b></span>Smile Studio</li>
+                    <li class="rank"><span><b>2</b><b>3</b></span>City Dental Care</li>
+                    <li class="rank"><span><b>3</b><b>4</b></span>Bright Teeth Clinic</li>
+                    <li class="rank rank-you"><span><b>4</b><b>1</b></span>Your business</li>
+                  </ol>
+                </div>
+                <div class="stage-copy">
+                  <h2>Get found</h2>
+                  <p>Climb Google for the searches that bring in work.</p>
+                </div>
+              </section>
+
+              <section class="stage stage-grow" id="stage-grow" role="tabpanel" aria-labelledby="tab-grow" data-stage>
+                <div class="stage-visual" aria-hidden="true">
+                  <p class="chart-label">Enquiries per month</p>
+                  <div class="bars">
+                    <span style="--h:22%"></span><span style="--h:30%"></span><span style="--h:38%"></span>
+                    <span style="--h:52%"></span><span style="--h:68%"></span><span class="bar-now" style="--h:92%"></span>
+                  </div>
+                </div>
+                <div class="stage-copy">
+                  <h2>Grow</h2>
+                  <p>Ads, social and email that turn clicks into calls.</p>
+                </div>
+              </section>
+
             </div>
+            <div class="reel-rail" aria-hidden="true"><span class="reel-thumb" data-thumb></span></div>
           </div>
-          <span class="scroller-thumb"></span>
+
+          <div class="reel-tabs" role="tablist" aria-label="What we do">
+            <button type="button" role="tab" id="tab-design" aria-controls="stage-design" aria-selected="true">Design</button>
+            <button type="button" role="tab" id="tab-build" aria-controls="stage-build" aria-selected="false" tabindex="-1">Build</button>
+            <button type="button" role="tab" id="tab-seo" aria-controls="stage-seo" aria-selected="false" tabindex="-1">Get found</button>
+            <button type="button" role="tab" id="tab-grow" aria-controls="stage-grow" aria-selected="false" tabindex="-1">Grow</button>
+          </div>
         </div>
       </div>
     </section>
