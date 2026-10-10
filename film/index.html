@@ -1,0 +1,689 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Five-shot music video</title>
+<style>
+  html,body{margin:0;background:#000;overflow:hidden}
+  canvas{display:block;width:100vw;height:auto}
+</style>
+</head>
+<body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// Every frame is a pure function of t (seconds). No rAF clock, no Date, seeded randomness only.
+const W = 1920, H = 1080;
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+
+// ---------- cut list (from the audio's section boundaries) ----------
+const CUTS = { s1: 0, s2: 4.11, s3: 6.9, s4a: 9.47, s4b: 11.12, s5: 12.78, end: 15.2 };
+// Onsets measured from the track, used for beat shakes, taps and chomps.
+const ONSETS = [0.51,1.09,1.25,1.39,2.41,2.67,2.81,3.04,3.23,4.2,4.67,5.02,5.46,5.85,6.15,6.34,6.55,6.73,
+  7.17,7.52,7.92,8.06,8.68,8.82,9.45,10.01,10.31,10.66,10.82,11.01,11.17,11.31,11.45,11.59,12.0,12.54,12.79,
+  13.33,13.54,14.14,14.49,14.7];
+
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeInOut = k => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const easeIn = k => k * k * k;
+const backOut = k => { const c = 1.9; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  x = x + Math.imul(x ^ x >>> 7, 61 | x) ^ x; return ((x ^ x >>> 14) >>> 0) / 4294967296; }; }
+const hash = (n) => { const r = rng(n * 7919 + 13); return r(); };
+// sum of decaying kicks: how "hit" the frame is right now
+function kick(t, list, decay = 10) { let v = 0; for (const o of list) if (t >= o) v += Math.exp(-(t - o) * decay); return v; }
+function lastOnset(t, list) { let o = -1e9; for (const x of list) if (x <= t) o = x; return o; }
+function onsetsIn(a, b) { return ONSETS.filter(o => o >= a && o < b); }
+
+function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
+function ell(x, y, rx, ry, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.abs(rx), Math.abs(ry), rot, 0, Math.PI * 2); }
+function fillE(x, y, rx, ry, c, rot = 0) { ell(x, y, rx, ry, rot); ctx.fillStyle = c; ctx.fill(); }
+function poly(pts) { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); }
+function lin(x0, y0, x1, y1, stops) { const g = ctx.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+function rad(x, y, r0, r1, stops, x1 = x, y1 = y) { const g = ctx.createRadialGradient(x, y, r0, x1, y1, r1); stops.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+// camera: zoom s around world point (fx,fy) placed at screen (sx,sy)
+function cam(s, fx, fy, sx = W / 2, sy = H / 2, rot = 0) { ctx.translate(sx, sy); ctx.rotate(rot); ctx.scale(s, s); ctx.translate(-fx, -fy); }
+
+// ---------- grain (pre-baked, offset per frame index) ----------
+const grain = document.createElement('canvas'); grain.width = 512; grain.height = 512;
+{ const g = grain.getContext('2d'); const id = g.createImageData(512, 512); const r = rng(42);
+  for (let i = 0; i < id.data.length; i += 4) { const v = r() * 255; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+  g.putImageData(id, 0, 0); }
+function post(t, vign = .55, grainAmt = .07) {
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = rad(W / 2, H / 2, H * .35, H * 1.05, [[0, 'rgba(0,0,0,0)'], [1, `rgba(0,0,0,${vign})`]]);
+  ctx.fillRect(0, 0, W, H);
+  const f = Math.round(t * 60); const r = rng(f + 1);
+  ctx.globalAlpha = grainAmt; ctx.globalCompositeOperation = 'overlay';
+  const ox = -r() * 512, oy = -r() * 512;
+  for (let x = ox; x < W; x += 512) for (let y = oy; y < H; y += 512) ctx.drawImage(grain, x, y);
+  ctx.restore();
+}
+function flash(t, at, dur = .1, color = '255,255,255', peak = .85) {
+  const k = prog(t, at, at + dur); if (t < at || k >= 1) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = `rgba(${color},${peak * (1 - k)})`; ctx.fillRect(0, 0, W, H); ctx.restore();
+}
+
+// ====================================================================
+// SHOT 1 — a single bottle alone on a cluttered table, dim room. Slow push-in.
+// ====================================================================
+function shot1(t) {
+  const lt = t - CUTS.s1, D = CUTS.s2 - CUTS.s1;
+  const k = easeInOut(prog(lt, 0, D));
+  ctx.save();
+  // push-in drifts slightly downward onto the bottle
+  cam(lerp(1.0, 1.75, k), lerp(960, 960, k), lerp(560, 650, k), W / 2, H / 2, lerp(-0.004, 0.006, k));
+  // wall
+  ctx.fillStyle = lin(0, 0, 0, 760, [[0, '#120e0d'], [.6, '#1f1814'], [1, '#2a1f18']]); ctx.fillRect(-400, -300, 2720, 1100);
+  // wainscot lines
+  ctx.strokeStyle = 'rgba(255,220,180,0.04)'; ctx.lineWidth = 3;
+  for (let x = -380; x < 2400; x += 160) { ctx.beginPath(); ctx.moveTo(x, 420); ctx.lineTo(x, 760); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(-400, 410, 2720, 14);
+  // moonlit window blinds on the wall (cool counter-light)
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 7; i++) {
+    const y = 120 + i * 46;
+    poly([[180, y], [560, y + 70], [560, y + 92], [180, y + 22]]);
+    ctx.fillStyle = `rgba(90,130,200,${0.05 + 0.01 * Math.sin(i)})`; ctx.fill();
+  }
+  ctx.restore();
+  // empty chair silhouettes in the dark
+  ctx.fillStyle = '#0d0a09';
+  for (const cx of [330, 1600]) { rr(cx - 90, 380, 180, 300, 18); ctx.fill(); ctx.fillRect(cx - 80, 640, 18, 200); ctx.fillRect(cx + 62, 640, 18, 200); }
+  // hanging lamp
+  ctx.strokeStyle = '#080605'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(960, -300); ctx.lineTo(960, 168); ctx.stroke();
+  const flick = 1 + 0.04 * Math.sin(lt * 23) * Math.sin(lt * 7.3) - 0.12 * Math.exp(-Math.abs(lt - 2.67) * 30);
+  // light cone
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  poly([[900, 205], [1020, 205], [1330, 860], [590, 860]]);
+  ctx.fillStyle = lin(0, 205, 0, 860, [[0, `rgba(255,190,110,${0.22 * flick})`], [1, 'rgba(255,170,90,0.02)']]); ctx.fill();
+  ctx.restore();
+  poly([[910, 160], [1010, 160], [1060, 215], [860, 215]]); ctx.fillStyle = '#1b1410'; ctx.fill();
+  fillE(960, 214, 100, 12, `rgba(255,214,150,${0.95 * flick})`);
+  // dust motes inside the cone
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const rd = rng(7);
+  for (let i = 0; i < 70; i++) {
+    const bx = rd(), by = rd(), sp = .3 + rd(), ph = rd() * 6.28;
+    const y = 230 + ((by * 620 + lt * 18 * sp) % 620);
+    const half = lerp(60, 370, (y - 205) / 655);
+    const x = 960 + (bx * 2 - 1) * half * .9 + Math.sin(lt * sp + ph) * 12;
+    ctx.fillStyle = `rgba(255,220,170,${0.35 * (0.5 + 0.5 * Math.sin(lt * 2 * sp + ph))})`;
+    ctx.beginPath(); ctx.arc(x, y, 1.6 + rd() * 1.8, 0, 6.28); ctx.fill();
+  }
+  ctx.restore();
+  // table (perspective)
+  poly([[160, 740], [1760, 740], [2100, 1080], [-180, 1080]]);
+  ctx.fillStyle = lin(0, 740, 0, 1080, [[0, '#2a1a10'], [1, '#160e09']]); ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = rad(960, 800, 10, 520, [[0, `rgba(255,170,90,${.42 * flick})`], [1, 'rgba(255,150,80,0)']]); ctx.fillRect(-200, 700, 2400, 400);
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2;
+  for (let i = 0; i < 14; i++) { ctx.beginPath(); ctx.moveTo(160 + i * 115, 740); ctx.lineTo(-180 + i * 175, 1080); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle = '#0e0906'; poly([[-180, 1080], [2100, 1080], [2100, 1110], [-180, 1110]]); ctx.fill();
+  // clutter — all of it empty, all of it dim
+  const dim = '#1a120d', dim2 = '#24180f', rim = 'rgba(255,190,120,.18)';
+  // pizza box
+  poly([[230, 800], [560, 790], [600, 860], [200, 875]]); ctx.fillStyle = dim2; ctx.fill(); ctx.strokeStyle = rim; ctx.lineWidth = 2; ctx.stroke();
+  // papers
+  for (let i = 0; i < 4; i++) { ctx.save(); ctx.translate(1440 + i * 8, 820 - i * 6); ctx.rotate(-.12 + i * .07);
+    ctx.fillStyle = i == 3 ? '#4a3c30' : '#2e241c'; ctx.fillRect(-120, -40, 240, 80); ctx.restore(); }
+  // crumpled paper balls
+  for (const [x, y, r] of [[700, 900, 28], [640, 940, 22], [1250, 960, 30], [1560, 930, 20]]) {
+    fillE(x, y, r, r * .8, '#3a2f26'); fillE(x - r * .3, y - r * .3, r * .4, r * .25, 'rgba(255,220,180,.12)'); }
+  // tipped empty glasses
+  for (const [x, y, rot] of [[420, 960, 1.45], [1360, 880, -1.5]]) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    poly([[-30, -55], [30, -55], [24, 55], [-24, 55]]); ctx.fillStyle = 'rgba(160,190,200,.08)'; ctx.fill(); ctx.strokeStyle = 'rgba(220,235,240,.25)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore(); }
+  // empty cans
+  for (const [x, y] of [[1150, 815], [780, 800]]) { rr(x - 24, y - 70, 48, 72, 6); ctx.fillStyle = dim; ctx.fill(); ctx.strokeStyle = rim; ctx.stroke(); }
+  // ashtray
+  fillE(560, 1000, 70, 22, '#120c08'); fillE(560, 996, 56, 15, '#2b211a');
+  // bottle shadow
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; fillE(990, 868, 120, 22, 'rgba(0,0,0,.55)'); ctx.restore();
+  bottle(960, 865, 1, lt);
+  ctx.restore();
+  // fade up from black with the music
+  const fade = 1 - easeOut(prog(t, 0.45, 1.35));
+  if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade})`; ctx.fillRect(0, 0, W, H); }
+}
+function bottle(x, base, s, lt) {
+  ctx.save(); ctx.translate(x, base); ctx.scale(s, s);
+  const path = () => { ctx.beginPath(); ctx.moveTo(-58, 0); ctx.lineTo(-58, -230); ctx.bezierCurveTo(-58, -290, -18, -300, -18, -340);
+    ctx.lineTo(-18, -420); ctx.lineTo(18, -420); ctx.lineTo(18, -340); ctx.bezierCurveTo(18, -300, 58, -290, 58, -230); ctx.lineTo(58, 0); ctx.closePath(); };
+  path(); ctx.fillStyle = lin(-58, 0, 58, 0, [[0, '#0a1a10'], [.35, '#1f4a2c'], [.7, '#123020'], [1, '#06120a']]); ctx.fill();
+  // last inch of liquid
+  ctx.save(); path(); ctx.clip();
+  ctx.fillStyle = lin(0, -40, 0, 0, [[0, 'rgba(255,150,40,.55)'], [1, 'rgba(160,70,10,.7)']]); ctx.fillRect(-60, -38 + Math.sin(lt * 1.3) * 1.5, 120, 40);
+  // label
+  ctx.fillStyle = '#d9c7a0'; ctx.fillRect(-58, -190, 116, 110);
+  ctx.fillStyle = '#6b1d14'; ctx.fillRect(-58, -180, 116, 18); ctx.fillRect(-58, -100, 116, 6);
+  ctx.fillStyle = '#2b1b10'; ctx.font = '700 30px "DejaVu Serif"'; ctx.textAlign = 'center'; ctx.fillText('No.1', 0, -122);
+  ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = lin(-58, 0, 58, 0, [[0, 'rgba(0,0,0,.6)'], [.4, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.7)']]); ctx.fillRect(-60, -200, 120, 130);
+  ctx.restore();
+  // glass highlights from the lamp
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(255,220,160,.55)'; rr(-40, -260, 9, 240, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(255,220,160,.35)'; rr(-12, -405, 6, 70, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(255,200,130,.18)'; rr(34, -240, 6, 200, 3); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#7a5a20'; rr(-20, -440, 40, 26, 4); ctx.fill();
+  ctx.restore();
+}
+
+// ====================================================================
+// SHOT 2 — cartoon rappers crowding the frame, sound waves blast past a figure who doesn't react.
+// Shake on each beat, quick cuts.
+// ====================================================================
+const RAPPERS = [
+  { x: 330, y: 760, s: 1.25, skin: '#8a5a3c', top: '#e8432e', cap: '#1d1d1f', glasses: false, dir: 1, ph: 0 },
+  { x: 650, y: 420, s: 0.95, skin: '#d9a77c', top: '#2f6fe0', cap: '#f2c23a', glasses: true, dir: 1, ph: 1.2 },
+  { x: 1590, y: 760, s: 1.3, skin: '#5a3726', top: '#20b46a', cap: '#e8432e', glasses: true, dir: -1, ph: 2.1 },
+  { x: 1300, y: 400, s: 0.92, skin: '#c58c63', top: '#f2c23a', cap: '#2f6fe0', glasses: false, dir: -1, ph: .6 },
+  { x: 960, y: 250, s: 0.8, skin: '#9c6845', top: '#b14ad8', cap: '#20b46a', glasses: true, dir: 1, ph: 3.0 },
+];
+const FIG = { x: 960, y: 690 };
+function shot2(t) {
+  const lt = t - CUTS.s2;
+  const beats = onsetsIn(CUTS.s2, CUTS.s3);
+  // quick cuts: framings change on chosen beats
+  const framings = [
+    { at: 0.0, s: 1.0, fx: 960, fy: 540, r: 0 },
+    { at: 0.56, s: 1.9, fx: 420, fy: 650, r: -.05 },     // left rapper, mouth wide
+    { at: 1.35, s: 1.0, fx: 960, fy: 560, r: .03 },      // wide again, tilted
+    { at: 1.74, s: 2.3, fx: 960, fy: 640, r: 0 },        // the unbothered face
+    { at: 2.23, s: 1.7, fx: 1450, fy: 560, r: .06 },     // right-side pair
+  ];
+  let f = framings[0]; for (const fr of framings) if (lt >= fr.at) f = fr;
+  const since = lt - f.at;
+  const hit = kick(t, beats, 14);
+  const ang = (lastOnset(t, beats) * 97.3) % 6.28;
+  const sx = Math.cos(ang) * 22 * hit + Math.sin(lt * 61) * 4 * hit, sy = Math.sin(ang) * 18 * hit;
+  ctx.save();
+  ctx.translate(sx, sy);
+  cam(f.s * (1 + 0.035 * since) * (1 + 0.02 * hit), f.fx, f.fy, W / 2, H / 2, f.r + 0.012 * hit * Math.sin(ang));
+  // background: hot halftone stage
+  ctx.fillStyle = rad(960, 600, 50, 1300, [[0, '#ffcf3d'], [.35, '#ff5a36'], [.75, '#7a1fa8'], [1, '#2a0b4a']]); ctx.fillRect(-1000, -800, 3920, 2700);
+  // radiating comic rays, rotating slowly
+  ctx.save(); ctx.translate(FIG.x, FIG.y - 120); ctx.rotate(lt * .25);
+  for (let i = 0; i < 24; i++) { ctx.rotate(Math.PI * 2 / 24); poly([[0, 0], [2400, -110], [2400, 110]]); ctx.fillStyle = i % 2 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.05)'; ctx.fill(); }
+  ctx.restore();
+  // halftone dots
+  ctx.fillStyle = 'rgba(40,0,60,.18)';
+  for (let y = -200; y < 1300; y += 34) for (let x = -400; x < 2400; x += 34) {
+    const d = Math.hypot(x - 960, y - 560) / 1100; const r = clamp(d, 0, 1) * 9;
+    if (r > .6) { ctx.beginPath(); ctx.arc(x + (y / 34 % 2) * 17, y, r, 0, 6.28); ctx.fill(); }
+  }
+  // sound waves from each mouth, blasting toward and PAST the figure
+  for (const R of RAPPERS) {
+    const mx = R.x + R.dir * 70 * R.s, my = R.y - 150 * R.s;
+    const tx = FIG.x + (FIG.x - mx) * 0.9, ty = FIG.y - 150 + (FIG.y - 150 - my) * 0.9; // aim beyond him
+    const a = Math.atan2(ty - my, tx - mx);
+    for (let j = 0; j < 6; j++) {
+      const ph = ((lt * 2.4 + j / 6 + R.ph) % 1);
+      const rr_ = 60 + ph * 1300;
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(a);
+      ctx.beginPath(); ctx.arc(0, 0, rr_, -0.33, 0.33);
+      ctx.strokeStyle = j % 2 ? `rgba(255,255,255,${0.75 * (1 - ph)})` : `rgba(30,10,60,${0.6 * (1 - ph)})`;
+      ctx.lineWidth = (14 + 10 * hit) * (1 - ph * .6); ctx.lineCap = 'round'; ctx.stroke();
+      ctx.restore();
+    }
+  }
+  // back-row rappers first, front-row last
+  for (const i of [4, 1, 3]) rapper(RAPPERS[i], lt, hit);
+  figure(FIG.x, FIG.y, lt);
+  for (const i of [0, 2]) rapper(RAPPERS[i], lt, hit);
+  // speed lines blowing past the figure on hits
+  ctx.save(); ctx.globalAlpha = clamp(hit) * .7; ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  const rs = rng(Math.round(lastOnset(t, beats) * 100));
+  for (let i = 0; i < 14; i++) { const y = 380 + rs() * 420, side = rs() < .5 ? -1 : 1, x0 = 960 + side * (150 + rs() * 120);
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + side * (120 + rs() * 200), y + (rs() - .5) * 30); ctx.stroke(); }
+  ctx.restore();
+  ctx.restore();
+}
+function rapper(R, lt, hit) {
+  const bob = Math.abs(Math.sin((lt + R.ph) * Math.PI / 0.604)) * 16 + hit * 10;
+  const open = 0.65 + 0.35 * Math.abs(Math.sin((lt * 7.5 + R.ph * 3)));
+  ctx.save(); ctx.translate(R.x, R.y - bob); ctx.scale(R.s * R.dir, R.s);
+  // body / hoodie
+  ctx.fillStyle = R.top; ctx.strokeStyle = '#140818'; ctx.lineWidth = 8; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(-150, 360); ctx.bezierCurveTo(-150, 120, -90, 40, 0, 40); ctx.bezierCurveTo(90, 40, 150, 120, 150, 360); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // pointing arm toward the figure
+  const swing = Math.sin((lt + R.ph) * 9) * .15;
+  ctx.save(); ctx.translate(90, 110); ctx.rotate(-0.55 + swing);
+  rr(-24, -24, 190, 54, 26); ctx.fill(); ctx.stroke();
+  fillE(180, 2, 34, 30, R.skin); ctx.stroke();
+  rr(196, -8, 48, 16, 8); ctx.fillStyle = R.skin; ctx.fill(); ctx.stroke();
+  ctx.restore();
+  // chain
+  ctx.strokeStyle = '#ffd34a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(0, 40, 70, .35, Math.PI - .35); ctx.stroke();
+  fillE(0, 118, 26, 26, '#ffd34a'); ctx.strokeStyle = '#140818'; ctx.lineWidth = 5; ctx.stroke();
+  // head
+  ctx.lineWidth = 8;
+  fillE(0, -90, 115, 125, R.skin); ctx.stroke();
+  // ear
+  fillE(-110, -80, 22, 32, R.skin); ctx.stroke();
+  // cap (turned around for some)
+  ctx.fillStyle = R.cap; ctx.beginPath(); ctx.arc(0, -130, 118, Math.PI * 1.02, Math.PI * 1.98); ctx.closePath(); ctx.fill(); ctx.stroke();
+  rr(40, -150, 120, 26, 13); ctx.fill(); ctx.stroke();
+  // eyes
+  if (R.glasses) { ctx.fillStyle = '#111'; rr(-10, -120, 70, 38, 12); ctx.fill(); rr(66, -120, 46, 38, 12); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(2, -114, 18, 6); }
+  else { fillE(30, -98, 16, 20, '#fff'); fillE(86, -98, 13, 18, '#fff'); fillE(36, -96, 7, 9, '#111'); fillE(90, -96, 6, 8, '#111');
+    ctx.strokeStyle = '#140818'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(10, -128); ctx.lineTo(50, -118); ctx.moveTo(70, -118); ctx.lineTo(104, -128); ctx.stroke(); }
+  // HUGE open mouth
+  const mh = 70 * open, mw = 62;
+  ctx.save(); ell(62, -20, mw, mh); ctx.fillStyle = '#3a0612'; ctx.fill(); ctx.clip();
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, -20 - mh, 130, 20);
+  fillE(62, -20 + mh * .8, 40, 26, '#e4566a');
+  ctx.restore();
+  ell(62, -20, mw, mh); ctx.strokeStyle = '#140818'; ctx.lineWidth = 8; ctx.stroke();
+  ctx.restore();
+}
+function figure(x, y, lt) {
+  // The one who doesn't react: small, still, hands in pockets. One slow blink.
+  ctx.save(); ctx.translate(x, y);
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; fillE(0, 250, 150, 26, 'rgba(60,0,60,.4)'); ctx.restore();
+  ctx.strokeStyle = '#140818'; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+  // legs
+  ctx.fillStyle = '#2b2d3a'; rr(-58, 120, 50, 130, 14); ctx.fill(); ctx.stroke(); rr(8, 120, 50, 130, 14); ctx.fill(); ctx.stroke();
+  fillE(-36, 252, 40, 16, '#eee'); ctx.stroke(); fillE(36, 252, 40, 16, '#eee'); ctx.stroke();
+  // hoodie
+  ctx.fillStyle = '#8f93a0'; ctx.beginPath(); ctx.moveTo(-95, 150); ctx.bezierCurveTo(-100, 0, -70, -50, 0, -50); ctx.bezierCurveTo(70, -50, 100, 0, 95, 150); ctx.closePath(); ctx.fill(); ctx.stroke();
+  rr(-60, 70, 120, 50, 16); ctx.fillStyle = '#7d818e'; ctx.fill(); ctx.stroke();  // pocket with hands in it
+  // head with hood up
+  fillE(0, -120, 92, 98, '#8f93a0'); ctx.stroke();
+  fillE(0, -110, 64, 70, '#c99a74'); ctx.stroke();
+  // flat, unbothered face — half-lidded eyes, straight mouth
+  const blink = lt > 1.95 && lt < 2.25 ? Math.sin(prog(lt, 1.95, 2.25) * Math.PI) : 0;
+  for (const ex of [-24, 24]) {
+    fillE(ex, -118, 13, 11 * (1 - blink * .9), '#fff'); fillE(ex, -114, 6, 6 * (1 - blink), '#111');
+    ctx.fillStyle = '#c99a74'; ctx.fillRect(ex - 15, -132, 30, 9 + blink * 10);
+    ctx.strokeStyle = '#140818'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(ex - 15, -124 + blink * 10); ctx.lineTo(ex + 15, -124 + blink * 10); ctx.stroke();
+  }
+  ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-18, -74); ctx.lineTo(18, -74); ctx.stroke();
+  // earbud wire — the reason he can't hear any of it
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-58, -100); ctx.bezierCurveTo(-70, -40, -30, -10, -20, 70); ctx.stroke();
+  fillE(-58, -102, 9, 9, '#fff');
+  ctx.restore();
+}
+
+// ====================================================================
+// SHOT 3 — label office: gold records, contract, a hand running up numbers. Snap zoom to the numbers.
+// ====================================================================
+const SNAP = 8.36;  // a kick, ~1.5s into the shot
+const CALC = { x: 1340, y: 590, w: 380, h: 470 };
+const DISP = { x: CALC.x + 30, y: CALC.y + 34, w: CALC.w - 60, h: 110 };
+function shot3(t) {
+  const lt = t - CUTS.s3;
+  const taps = onsetsIn(CUTS.s3, CUTS.s4a);
+  // number climbs with every tap, then runs away after the snap
+  const nTaps = taps.filter(o => o <= t).length;
+  let value = [1200, 8400, 64000, 250000, 1900000, 4750000][Math.min(nTaps, 5)];
+  if (t > SNAP) value = lerp(4750000, 99999999, easeIn(prog(t, SNAP, CUTS.s4a - 0.15)));
+  // camera
+  const sk = prog(t, SNAP - 0.04, SNAP + 0.14);
+  const snapK = backOut(sk);
+  const dCx = DISP.x + DISP.w / 2, dCy = DISP.y + DISP.h / 2;
+  const s = lerp(1.0 + lt * 0.03, 5.0, snapK) * (1 + 0.012 * (t - SNAP) * (t > SNAP));
+  const fx = lerp(1060, dCx, snapK), fy = lerp(590, dCy, snapK);
+  ctx.save();
+  cam(s, fx, fy, W / 2, H / 2, lerp(-0.02, 0, snapK));
+  // wall
+  ctx.fillStyle = lin(0, 0, 0, 640, [[0, '#0f2a28'], [1, '#183c38']]); ctx.fillRect(-200, -200, 2320, 900);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; for (let x = -200; x < 2200; x += 90) ctx.fillRect(x, -200, 4, 900);
+  // gold records with picture lights
+  const recs = [[260, 230], [620, 200], [980, 230], [1340, 200], [1700, 230]];
+  recs.forEach(([x, y], i) => goldRecord(x, y, lt, i));
+  // desk
+  ctx.fillStyle = lin(0, 540, 0, 1080, [[0, '#5a2f17'], [1, '#2a140a']]); ctx.fillRect(-200, 540, 2320, 700);
+  ctx.fillStyle = 'rgba(255,200,150,.12)'; ctx.fillRect(-200, 540, 2320, 8);
+  // contract
+  ctx.save(); ctx.translate(560, 840); ctx.rotate(-0.06);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(-300, -190, 620, 420);
+  ctx.fillStyle = '#f3ecdc'; ctx.fillRect(-310, -210, 620, 420);
+  ctx.fillStyle = '#222'; ctx.font = '700 34px "DejaVu Serif"'; ctx.textAlign = 'center'; ctx.fillText('RECORDING AGREEMENT', 0, -150);
+  ctx.fillStyle = 'rgba(30,30,30,.55)';
+  for (let i = 0; i < 9; i++) ctx.fillRect(-260, -110 + i * 26, 520 - (i % 3) * 40, 8);
+  ctx.fillStyle = '#222'; ctx.fillRect(40, 150, 220, 3);
+  ctx.strokeStyle = '#13235e'; ctx.lineWidth = 4; ctx.beginPath(); // signature
+  for (let i = 0; i <= 40; i++) { const x = 50 + i * 5, y = 140 - Math.sin(i * .7) * 14 - Math.sin(i * .23) * 8; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke();
+  ctx.restore();
+  // pen
+  ctx.save(); ctx.translate(980, 940); ctx.rotate(-.5); rr(-150, -9, 300, 18, 9); ctx.fillStyle = '#111'; ctx.fill(); ctx.fillStyle = '#d4af37'; ctx.fillRect(110, -9, 40, 18); ctx.restore();
+  // stacks of cash
+  for (let i = 0; i < 3; i++) { rr(100 + i * 20, 600 - i * 26, 230, 40, 6); ctx.fillStyle = i % 2 ? '#3f7a45' : '#4f9156'; ctx.fill(); ctx.fillStyle = '#e9e2c8'; ctx.fillRect(195 + i * 20, 600 - i * 26, 40, 40); }
+  calculator(t, taps, value);
+  ctx.restore();
+  // snap zoom streaks
+  const streak = Math.sin(prog(t, SNAP - 0.04, SNAP + 0.2) * Math.PI);
+  if (streak > 0.01) {
+    ctx.save(); ctx.globalAlpha = streak * .8; ctx.strokeStyle = '#fff'; const rs = rng(11);
+    for (let i = 0; i < 60; i++) { const a = rs() * 6.28, r0 = 250 + rs() * 300; ctx.lineWidth = 2 + rs() * 5;
+      ctx.beginPath(); ctx.moveTo(W / 2 + Math.cos(a) * r0, H / 2 + Math.sin(a) * r0); ctx.lineTo(W / 2 + Math.cos(a) * (r0 + 500), H / 2 + Math.sin(a) * (r0 + 500)); ctx.stroke(); }
+    ctx.restore();
+  }
+  flash(t, SNAP + 0.02, 0.12, '255,240,190', .5);
+}
+function goldRecord(x, y, lt, i) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  poly([[x - 40, y - 190], [x + 40, y - 190], [x + 190, y + 170], [x - 190, y + 170]]);
+  ctx.fillStyle = lin(0, y - 190, 0, y + 170, [[0, 'rgba(255,220,150,.16)'], [1, 'rgba(255,220,150,0)']]); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = '#0b0b0b'; ctx.fillRect(x - 130, y - 140, 260, 300);
+  ctx.fillStyle = '#1b1b1b'; ctx.fillRect(x - 116, y - 126, 232, 272);
+  ctx.fillStyle = rad(x - 30, y - 40, 5, 110, [[0, '#fff3c4'], [.3, '#f0c64a'], [1, '#8a6414']]);
+  ctx.beginPath(); ctx.arc(x, y - 10, 95, 0, 6.28); ctx.fill();
+  ctx.strokeStyle = 'rgba(90,60,10,.35)'; ctx.lineWidth = 1.5;
+  for (let r = 40; r < 94; r += 6) { ctx.beginPath(); ctx.arc(x, y - 10, r, 0, 6.28); ctx.stroke(); }
+  // moving sheen
+  const a = lt * .8 + i;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(255,255,220,.35)'; ctx.lineWidth = 30;
+  ctx.beginPath(); ctx.arc(x, y - 10, 70, a, a + .5); ctx.stroke(); ctx.restore();
+  fillE(x, y - 10, 30, 30, '#c0392b'); fillE(x, y - 10, 4, 4, '#111');
+  ctx.fillStyle = '#d4af37'; ctx.fillRect(x - 70, y + 110, 140, 22);
+}
+const SEG = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' };
+function seg7(ch, x, y, w, h, on, off) {
+  const t = w * .18, segs = {
+    a: [x + t, y, w - 2 * t, t], d: [x + t, y + h - t, w - 2 * t, t], g: [x + t, y + h / 2 - t / 2, w - 2 * t, t],
+    f: [x, y + t * .6, t, h / 2 - t], b: [x + w - t, y + t * .6, t, h / 2 - t], e: [x, y + h / 2 + t * .4, t, h / 2 - t], c: [x + w - t, y + h / 2 + t * .4, t, h / 2 - t] };
+  for (const k in segs) { const [sx, sy, sw, sh] = segs[k]; rr(sx, sy, sw, sh, t / 2); ctx.fillStyle = (SEG[ch] || '').includes(k) ? on : off; ctx.fill(); }
+}
+function calculator(t, taps, value) {
+  const { x, y, w, h } = CALC;
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; rr(x + 14, y + 20, w, h, 30); ctx.fill();
+  ctx.fillStyle = lin(x, y, x, y + h, [[0, '#3a3d44'], [1, '#22242a']]); rr(x, y, w, h, 30); ctx.fill();
+  // display
+  ctx.fillStyle = '#9fb48a'; rr(DISP.x, DISP.y, DISP.w, DISP.h, 10); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(DISP.x, DISP.y, DISP.w, 10);
+  const str = Math.floor(value).toString().padStart(8, ' ').slice(-8);
+  const dw = 30, gap = 7, startX = DISP.x + DISP.w - 18 - 8 * (dw + gap) + gap;
+  for (let i = 0; i < 8; i++) seg7(str[i], startX + i * (dw + gap), DISP.y + 22, dw, DISP.h - 44, '#1d2618', 'rgba(29,38,24,.08)');
+  ctx.fillStyle = '#1d2618'; ctx.font = '700 22px Inter'; ctx.fillText('$', DISP.x + 14, DISP.y + 34);
+  // keys
+  const rows = 5, cols = 4, kw = 70, kh = 48, gx = (w - 60 - cols * kw) / (cols - 1);
+  const last = lastOnset(t, taps); const pressed = t - last < 0.09 ? Math.floor(hash(Math.round(last * 100)) * rows * cols) : -1;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const i = r * cols + c, kx = x + 30 + c * (kw + gx), ky = y + 170 + r * (kh + 10), down = i === pressed ? 5 : 0;
+    ctx.fillStyle = '#101114'; rr(kx, ky + 6, kw, kh, 12); ctx.fill();
+    ctx.fillStyle = c === 3 ? '#e07b2a' : '#4b4f58'; rr(kx, ky + down, kw, kh, 12); ctx.fill();
+  }
+  // the hand: index finger hops to a key on every onset
+  const tgt = pressed >= 0 ? pressed : Math.floor(hash(Math.round(last * 100)) * rows * cols);
+  const tr = Math.floor(tgt / cols), tc = tgt % cols;
+  const hx = x + 30 + tc * (kw + gx) + kw / 2, hy = y + 170 + tr * (kh + 10) + kh / 2;
+  const lift = t - last < 0.09 ? 0 : clamp((t - last - 0.09) / 0.12) * 26;
+  hand(hx, hy - lift, 1.2);
+}
+function hand(x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s); ctx.rotate(-0.35);
+  ctx.strokeStyle = '#2a140a'; ctx.lineWidth = 5; ctx.fillStyle = '#d7a07a';
+  rr(-14, -6, 28, 120, 14); ctx.fill(); ctx.stroke();                // index finger
+  rr(-20, 70, 110, 120, 40); ctx.fill(); ctx.stroke();               // palm/curled fingers
+  rr(76, 90, 40, 70, 20); ctx.fill(); ctx.stroke();                  // thumb
+  ctx.fillStyle = '#1e1e1e'; rr(-10, 180, 110, 220, 10); ctx.fill(); // sleeve
+  ctx.fillStyle = '#d4af37'; ctx.fillRect(-10, 182, 110, 16);        // gold watch band
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; rr(-8, 2, 10, 20, 5); ctx.fill();
+  ctx.restore();
+}
+
+// ====================================================================
+// SHOT 4a — a giant swallowing microphones like snacks.
+// ====================================================================
+const CHOMPS = [9.95, 10.66];   // half-line: two mics, landing on onsets 10.01 / 10.66
+function shot4a(t) {
+  const lt = t - CUTS.s4a;
+  ctx.save();
+  const hit = kick(t, CHOMPS.map(c => c + .04), 12);
+  cam(0.96 + lt * .06 + hit * .02, 960, 470 - lt * 20, W / 2, H / 2 + hit * 10);
+  // red club haze, low angle
+  ctx.fillStyle = lin(0, 0, 0, 1080, [[0, '#14030a'], [.6, '#5a0d1c'], [1, '#c2361f']]); ctx.fillRect(-300, -300, 2520, 1700);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 5; i++) { const a = -1.9 + i * .22 + Math.sin(lt * 1.5 + i) * .05;
+    ctx.save(); ctx.translate(960, 1250); ctx.rotate(a); poly([[0, 0], [1800, -60], [1800, 60]]);
+    ctx.fillStyle = 'rgba(255,90,60,.08)'; ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  // tiny rivals at the bottom of frame, looking up
+  for (let i = 0; i < 6; i++) { const x = 200 + i * 300 + (i > 2 ? 150 : 0), y = 1040;
+    ctx.fillStyle = '#12050a'; fillE(x, y - 70, 26, 28, '#12050a'); rr(x - 30, y - 44, 60, 80, 20); ctx.fill(); }
+  // the giant (fills frame)
+  const G = { x: 960, y: 980 };
+  ctx.fillStyle = '#1b0a12'; ctx.strokeStyle = '#000'; ctx.lineWidth = 10;
+  ctx.beginPath(); ctx.moveTo(G.x - 760, 1200); ctx.bezierCurveTo(G.x - 700, 520, G.x - 380, 420, G.x, 420); ctx.bezierCurveTo(G.x + 380, 420, G.x + 700, 520, G.x + 760, 1200); ctx.closePath(); ctx.fill();
+  // rim light
+  ctx.save(); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = rad(G.x + 700, 500, 50, 600, [[0, 'rgba(255,120,60,.35)'], [1, 'rgba(0,0,0,0)']]); ctx.fillRect(0, 0, 2000, 1300); ctx.restore();
+  // chains
+  ctx.strokeStyle = '#ffcf3d'; ctx.lineWidth = 22; ctx.beginPath(); ctx.arc(G.x, 420, 300, .5, Math.PI - .5); ctx.stroke();
+  // head
+  const hx = G.x, hy = 210;
+  fillE(hx, hy, 300, 290, '#6b3a26'); ctx.strokeStyle = '#000'; ctx.lineWidth = 10; ctx.stroke();
+  ctx.save(); ell(hx, hy, 300, 290); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+  fillE(hx + 260, hy - 60, 160, 260, 'rgba(255,120,60,.25)'); ctx.restore();
+  // crown
+  ctx.fillStyle = '#ffcf3d'; poly([[hx - 170, hy - 230], [hx - 120, hy - 360], [hx - 50, hy - 260], [hx, hy - 390], [hx + 50, hy - 260], [hx + 120, hy - 360], [hx + 170, hy - 230]]); ctx.fill(); ctx.stroke();
+  // eyes looking down at the snack
+  for (const ex of [-110, 110]) { fillE(hx + ex, hy - 50, 50, 40, '#fff'); ctx.stroke(); fillE(hx + ex + 10, hy - 30, 20, 20, '#111'); }
+  // mouth: opens wide before each chomp, snaps shut on it
+  let open = 0.15;
+  for (const c of CHOMPS) { if (t > c - 0.5 && t < c) open = Math.max(open, easeOut(prog(t, c - 0.5, c - 0.12)) * (1 - prog(t, c - 0.06, c)));
+    if (t >= c && t < c + 0.25) open = Math.max(open, 0.15 * Math.sin(prog(t, c, c + 0.25) * Math.PI * 3) ** 2 * .6); }
+  const mh = 30 + open * 170;
+  ell(hx, hy + 140, 170, mh / 2 + 8); ctx.fillStyle = '#2a0508'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.save(); ell(hx, hy + 140, 170, mh / 2 + 8); ctx.clip();
+  ctx.fillRect(hx - 170, hy + 140 - mh / 2 - 8, 340, 26); ctx.fillRect(hx - 170, hy + 140 + mh / 2 - 18, 340, 26);
+  ctx.restore();
+  // hand holding a bundle of mics like a bag of chips
+  const hand_ = { x: hx + 520, y: 760 };
+  ctx.save(); ctx.translate(hand_.x, hand_.y); ctx.rotate(-.2);
+  for (let i = 0; i < 5; i++) mic(-60 + i * 30, -60 - (i % 2) * 20, 1, -.3 + i * .15);
+  fillE(0, 30, 120, 90, '#6b3a26'); ctx.strokeStyle = '#000'; ctx.lineWidth = 10; ctx.stroke();
+  ctx.restore();
+  // a mic flies from the hand into the mouth for each chomp
+  for (const c of CHOMPS) {
+    const k = prog(t, c - 0.55, c);
+    if (k > 0 && k < 1) { const e = easeInOut(k);
+      const x = lerp(hand_.x - 40, hx, e), y = lerp(hand_.y - 100, hy + 120, e) - Math.sin(e * Math.PI) * 50;
+      mic(x, y, lerp(1.1, .8, e), e * 9); }
+    // crumbs / sparks out of the mouth
+    const ck = prog(t, c, c + 0.45);
+    if (ck > 0 && ck < 1) { const r = rng(Math.round(c * 100));
+      for (let i = 0; i < 22; i++) { const a = -Math.PI * r(), sp = 300 + r() * 500;
+        const px = hx + Math.cos(a) * sp * ck * (r() < .5 ? -1 : 1), py = hy + 150 + Math.sin(a) * sp * ck * .6 + 900 * ck * ck;
+        ctx.fillStyle = r() < .5 ? '#c9c9c9' : '#ffcf3d'; ctx.globalAlpha = 1 - ck; ctx.fillRect(px, py, 14, 14); }
+      ctx.globalAlpha = 1; }
+  }
+  ctx.restore();
+  flash(t, CHOMPS[0], .08, '255,200,120', .35); flash(t, CHOMPS[1], .08, '255,200,120', .35);
+}
+function mic(x, y, s, rot) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(s, s);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 5;
+  poly([[-14, 10], [14, 10], [9, 120], [-9, 120]]); ctx.fillStyle = '#222'; ctx.fill(); ctx.stroke();
+  fillE(0, -20, 34, 38, '#b8bcc4'); ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 2;
+  for (let i = -24; i <= 24; i += 8) { ctx.beginPath(); ctx.moveTo(-30, -20 + i); ctx.lineTo(30, -20 + i); ctx.stroke(); }
+  ctx.restore();
+}
+
+// ====================================================================
+// SHOT 4b — rivals slumped under a bar table among empty glasses.
+// ====================================================================
+function shot4b(t) {
+  const lt = t - CUTS.s4b;
+  ctx.save();
+  cam(1.08 + lt * .05, 960 - 40 + lt * 50, 600, W / 2, H / 2, 0.01);
+  // floor-level view; under the table is dark, the bar beyond glows green
+  ctx.fillStyle = lin(0, 0, 0, 1080, [[0, '#04100c'], [.55, '#0d2e22'], [1, '#07130e']]); ctx.fillRect(-300, -300, 2520, 1700);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = rad(1500, 420, 20, 700, [[0, 'rgba(60,255,160,.25)'], [1, 'rgba(0,0,0,0)']]); ctx.fillRect(-300, -300, 2520, 1700);
+  ctx.font = '900 120px Inter'; ctx.fillStyle = `rgba(80,255,170,${.35 + .1 * Math.sin(lt * 30) * (lt % .9 < .1)})`; ctx.fillText('BAR', 1380, 470);
+  ctx.restore();
+  // floor
+  poly([[-300, 760], [2220, 760], [2220, 1400], [-300, 1400]]); ctx.fillStyle = lin(0, 760, 0, 1080, [[0, '#0b1612'], [1, '#050806']]); ctx.fill();
+  // table underside + legs
+  ctx.fillStyle = '#0a0705'; poly([[-200, -100], [2100, -100], [2100, 150], [-200, 210]]); ctx.fill();
+  ctx.fillStyle = 'rgba(80,255,170,.12)'; ctx.fillRect(-200, 150, 2300, 6);
+  for (const lx of [180, 1720]) { ctx.fillStyle = '#100b08'; ctx.fillRect(lx - 30, 150, 60, 700); }
+  // glasses tipped on the floor and stacked
+  const rg = rng(5);
+  for (let i = 0; i < 18; i++) { const x = rg() * 1900, y = 860 + rg() * 180, rot = (rg() - .5) * 3.2, sc = .6 + rg() * .6;
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.scale(sc, sc);
+    poly([[-26, -48], [26, -48], [20, 48], [-20, 48]]); ctx.fillStyle = 'rgba(120,255,190,.06)'; ctx.fill(); ctx.strokeStyle = 'rgba(170,255,210,.35)'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore(); }
+  // three slumped rivals
+  slumped(520, 820, 1.0, '#c0392b', lt, 0);
+  slumped(980, 860, 1.12, '#2f6fe0', lt, 1);
+  slumped(1430, 830, 0.95, '#f2c23a', lt, 2);
+  // a dropped mic, still rolling
+  mic(1180, 1000, .9, 1.4 + lt * .6);
+  ctx.restore();
+}
+function slumped(x, y, s, col, lt, i) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  const breathe = Math.sin(lt * 2 + i) * 4;
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 7; ctx.lineJoin = 'round';
+  // legs splayed forward
+  ctx.fillStyle = '#1b2230'; rr(-120, 60, 150, 50, 24); ctx.fill(); ctx.stroke(); rr(10, 80, 170, 50, 24); ctx.fill(); ctx.stroke();
+  // torso leaning
+  ctx.save(); ctx.rotate(-.25 + i * .2);
+  ctx.fillStyle = col; rr(-80, -150 + breathe, 160, 220, 50); ctx.fill(); ctx.stroke();
+  // head lolled
+  ctx.save(); ctx.translate(0, -190 + breathe); ctx.rotate(.5 - i * .35);
+  fillE(0, 0, 70, 74, ['#8a5a3c', '#d9a77c', '#5a3726'][i]); ctx.stroke();
+  // X eyes
+  ctx.lineWidth = 6; for (const ex of [-24, 24]) { ctx.beginPath(); ctx.moveTo(ex - 10, -14); ctx.lineTo(ex + 10, 6); ctx.moveTo(ex + 10, -14); ctx.lineTo(ex - 10, 6); ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(0, 32, 18, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
+  // little z's / swirl
+  ctx.fillStyle = 'rgba(170,255,210,.8)'; ctx.font = '700 34px Inter';
+  ctx.fillText('z', 60 + Math.sin(lt * 3 + i) * 6, -60 - ((lt * 40 + i * 20) % 50));
+  ctx.restore(); ctx.restore();
+  // an arm still holding an empty glass
+  ctx.fillStyle = col; rr(60, -40, 120, 40, 20); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.translate(200, -10); ctx.rotate(1.9);
+  poly([[-20, -36], [20, -36], [15, 36], [-15, 36]]); ctx.fillStyle = 'rgba(120,255,190,.08)'; ctx.fill(); ctx.strokeStyle = 'rgba(170,255,210,.5)'; ctx.lineWidth = 3; ctx.stroke();
+  ctx.restore();
+  ctx.restore();
+}
+
+// ====================================================================
+// SHOT 5 — a bartender slides a long receipt across the counter, a hand waves it off.
+// Receipt unrolls toward the camera.
+// ====================================================================
+const ITEMS = [['BOTTLE, No.1', '420.00'], ['GLASSES (BROKEN) x12', '180.00'], ['MICROPHONES (EATEN) x2', '1,900.00'],
+  ['TABLE (UNDER, 3 GUESTS)', '75.00'], ['SOUNDPROOFING', '640.00'], ['CALCULATOR BATTERIES', '9.99'],
+  ['GOLD RECORD POLISH', '55.00'], ['NOISE COMPLAINT', '300.00'], ['ANOTHER ROUND', '88.00'], ['ANOTHER ROUND', '88.00'],
+  ['ANOTHER ROUND', '88.00'], ['TAB INTEREST', '1,212.00'], ['TOTAL', '$5,055.99']];
+function shot5(t) {
+  const lt = t - CUTS.s5, D = CUTS.end - CUTS.s5;
+  ctx.save();
+  const HZ = 520;  // horizon of the counter
+  // back bar
+  ctx.fillStyle = lin(0, 0, 0, HZ, [[0, '#120a06'], [1, '#2a170c']]); ctx.fillRect(0, 0, W, HZ + 2);
+  // shelves of bottles, softly lit
+  for (let r = 0; r < 2; r++) { ctx.fillStyle = '#3a2210'; ctx.fillRect(0, 150 + r * 170, W, 10);
+    for (let i = 0; i < 26; i++) { const x = 30 + i * 74, hgt = 90 + hash(i + r * 40) * 50, c = ['#3d7a4a', '#7a3d2b', '#b88a2e', '#4a5f8a'][(i + r) % 4];
+      ctx.fillStyle = c; ctx.globalAlpha = .55; rr(x, 150 + r * 170 - hgt, 34, hgt, 8); ctx.fill(); ctx.globalAlpha = 1; } }
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = rad(960, 300, 20, 900, [[0, 'rgba(255,170,80,.22)'], [1, 'rgba(0,0,0,0)']]); ctx.fillRect(0, 0, W, H); ctx.restore();
+  // bartender (torso, behind counter)
+  const slideK = easeOut(prog(lt, 0.0, 0.7));
+  const bx = 960 - 60 * slideK;
+  ctx.save(); ctx.translate(bx, HZ);
+  ctx.strokeStyle = '#000'; ctx.lineWidth = 7;
+  ctx.fillStyle = '#f0ece4'; rr(-150, -330, 300, 340, 40); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1c1c22'; poly([[-150, -300], [-40, -300], [-10, 10], [-150, 10]]); ctx.fill(); poly([[150, -300], [40, -300], [10, 10], [150, 10]]); ctx.fill();
+  ctx.fillStyle = '#8a1a1a'; poly([[-40, -320], [0, -300], [40, -320], [40, -280], [0, -300], [-40, -280]]); ctx.fill();
+  fillE(0, -400, 80, 86, '#c58c63'); ctx.stroke();
+  ctx.fillStyle = '#1c1c22'; ctx.beginPath(); ctx.arc(0, -430, 84, Math.PI, 0); ctx.fill();
+  ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-40, -380); ctx.lineTo(-10, -385); ctx.moveTo(10, -385); ctx.lineTo(40, -380); ctx.stroke();  // flat, knowing eyes
+  ctx.beginPath(); ctx.moveTo(-50, -350); ctx.quadraticCurveTo(0, -330, 50, -355); ctx.stroke();                                         // moustache-ish smirk
+  // arm sliding the receipt
+  ctx.fillStyle = '#f0ece4'; ctx.lineWidth = 7;
+  ctx.save(); ctx.rotate(.15); rr(60, -150, 80, 180 + 60 * slideK, 30); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.restore();
+  // counter top (perspective)
+  poly([[-200, HZ], [W + 200, HZ], [W + 900, H], [-900, H]]);
+  ctx.fillStyle = lin(0, HZ, 0, H, [[0, '#4a2510'], [1, '#22100a']]); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = rad(960, HZ + 80, 10, 700, [[0, 'rgba(255,180,100,.25)'], [1, 'rgba(0,0,0,0)']]); ctx.fill(); ctx.restore();
+  ctx.fillStyle = 'rgba(255,200,140,.25)'; ctx.fillRect(-200, HZ, W + 400, 4);
+  // ---- the receipt: unrolls from the bartender's hand toward camera, TOTAL leading ----
+  // p = position along the strip (0 = roll at the bartender, 1 = just past the bottom of frame)
+  const unroll = lerp(0.06, 1, easeInOut(prog(lt, 0.3, 2.1)));
+  const cx = W / 2 - 40 * slideK;
+  const yOf = p => HZ + 34 + 640 * Math.pow(p, 1.5);
+  const hwOf = p => 64 + (yOf(p) - HZ - 34) * 0.72;
+  const PW = 360;
+  // paper
+  ctx.beginPath(); const NP = 40;
+  for (let i = 0; i <= NP; i++) { const p = unroll * i / NP; i ? ctx.lineTo(cx - hwOf(p), yOf(p)) : ctx.moveTo(cx - hwOf(p), yOf(p)); }
+  for (let i = NP; i >= 0; i--) { const p = unroll * i / NP; ctx.lineTo(cx + hwOf(p), yOf(p)); }
+  ctx.closePath(); ctx.fillStyle = lin(0, HZ, 0, yOf(unroll), [[0, '#d8cfbd'], [1, '#f6f1e6']]); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgba(0,0,0,.12)';
+  ctx.fillRect(cx - hwOf(unroll) - 10, yOf(unroll) - 4, 2 * hwOf(unroll) + 20, 12); ctx.restore();
+  // printed rows ride with the paper: TOTAL at the leading edge, header trailing near the roll
+  const rows = [...ITEMS].reverse().concat([['* YOUR TAB *', '']]);
+  rows.forEach(([name, price], i) => {
+    const p = unroll - 0.035 - i * 0.068;
+    if (p <= 0.004) return;
+    const y = yOf(p), hw = hwOf(p), sc = hw / (PW / 2);
+    ctx.save(); ctx.setTransform(sc, 0, 0, sc * 0.62, cx - hw, y);
+    const total = name === 'TOTAL', head = !price;
+    ctx.fillStyle = total ? '#8a1010' : '#2a2622';
+    ctx.font = `${total || head ? 900 : 700} ${total ? 36 : 21}px "Courier 10 Pitch", "DejaVu Sans Mono", monospace`;
+    if (head) { ctx.textAlign = 'center'; ctx.fillText(name, PW / 2, 0); }
+    else { ctx.textAlign = 'left'; ctx.fillText(name, 16, 0); ctx.textAlign = 'right'; ctx.fillText(price, PW - 16, 0); }
+    if (total) { ctx.fillRect(16, -46, PW - 32, 4); }
+    ctx.restore();
+  });
+  // the roll still in the bartender's hand
+  rr(cx - 80, HZ + 10, 160, 34, 17); ctx.fillStyle = '#e9e2d2'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3; ctx.stroke();
+  // the wave-off hand, foreground right
+  const hk = easeOut(prog(lt, 1.35, 1.75));
+  if (hk > 0) {
+    const wave = Math.sin((lt - 1.35) * 14) * .32 * clamp((lt - 1.45) / .15);
+    ctx.save(); ctx.translate(lerp(W + 300, W - 360, hk), lerp(H + 400, H - 60, hk)); ctx.rotate(-.25 + wave);
+    ctx.strokeStyle = '#1a0d06'; ctx.lineWidth = 10; ctx.fillStyle = '#c99a74';
+    ctx.fillStyle = '#2a2a33'; rr(-110, 120, 220, 500, 30); ctx.fill(); ctx.stroke();   // sleeve
+    ctx.fillStyle = '#c99a74';
+    rr(-120, -150, 240, 280, 70); ctx.fill(); ctx.stroke();                              // palm
+    for (let f = 0; f < 4; f++) { rr(-110 + f * 58, -330 + Math.abs(f - 1.5) * 26, 50, 220, 25); ctx.fill(); ctx.stroke(); }
+    ctx.save(); ctx.rotate(-.7); rr(-250, -40, 160, 56, 28); ctx.fill(); ctx.stroke(); ctx.restore(); // thumb
+    ctx.restore();
+    // motion arcs
+    ctx.save(); ctx.strokeStyle = `rgba(255,240,220,${.5 * Math.abs(Math.cos((lt - 1.35) * 14)) * hk})`; ctx.lineWidth = 8; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(W - 360, H + 60, 560, -2.1, -1.55); ctx.stroke(); ctx.restore();
+  }
+  ctx.restore();
+  // end: cut to black on the last frames
+  const out = prog(t, CUTS.end - 0.22, CUTS.end - 0.02);
+  if (out > 0) { ctx.fillStyle = `rgba(0,0,0,${easeIn(out)})`; ctx.fillRect(0, 0, W, H); }
+}
+
+// ---------- root timeline ----------
+function renderAt(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  if (t < CUTS.s2) { shot1(t); post(t, .7, .09); }
+  else if (t < CUTS.s3) { shot2(t); post(t, .35, .06); flash(t, CUTS.s2, .07); }
+  else if (t < CUTS.s4a) { shot3(t); post(t, .55, .06); }
+  else if (t < CUTS.s4b) { shot4a(t); post(t, .5, .07); }
+  else if (t < CUTS.s5) { shot4b(t); post(t, .65, .08); flash(t, CUTS.s4b, .06, '120,255,190', .3); }
+  else { shot5(t); post(t, .55, .07); }
+}
+window.renderAt = renderAt;
+window.DURATION = CUTS.end;
+// preview mode: ?t=3.2 renders a still; ?play plays in real time against the page clock (preview only)
+const q = new URLSearchParams(location.search);
+if (q.has('t')) renderAt(parseFloat(q.get('t')));
+else if (q.has('play')) { const a = new Audio('audio.mp3'); a.play(); (function loop() { renderAt(a.currentTime); requestAnimationFrame(loop); })(); }
+else renderAt(0.8);
+</script>
+</body>
+</html>
