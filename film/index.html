@@ -163,7 +163,7 @@ function bottle(x, base, s, lt) {
   // label
   ctx.fillStyle = '#d9c7a0'; ctx.fillRect(-58, -190, 116, 110);
   ctx.fillStyle = '#6b1d14'; ctx.fillRect(-58, -180, 116, 18); ctx.fillRect(-58, -100, 116, 6);
-  ctx.fillStyle = '#2b1b10'; ctx.font = '700 30px "DejaVu Serif"'; ctx.textAlign = 'center'; ctx.fillText('No.1', 0, -122);
+  ctx.fillStyle = '#2b1b10'; ctx.font = '700 30px "DejaVu Serif"'; ctx.textAlign = 'center'; ctx.fillText('BEER', 0, -122);
   ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = lin(-58, 0, 58, 0, [[0, 'rgba(0,0,0,.6)'], [.4, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.7)']]); ctx.fillRect(-60, -200, 120, 130);
   ctx.restore();
   // glass highlights from the lamp
@@ -576,10 +576,10 @@ function slumped(x, y, s, col, lt, i) {
 // SHOT 5 — a bartender slides a long receipt across the counter, a hand waves it off.
 // Receipt unrolls toward the camera.
 // ====================================================================
-const ITEMS = [['BOTTLE, No.1', '420.00'], ['GLASSES (BROKEN) x12', '180.00'], ['MICROPHONES (EATEN) x2', '1,900.00'],
+const ITEMS = [['LAST BEER', '9.00'], ['GLASSES (BROKEN) x12', '180.00'], ['MICROPHONES (EATEN) x2', '1,900.00'],
   ['TABLE (UNDER, 3 GUESTS)', '75.00'], ['SOUNDPROOFING', '640.00'], ['CALCULATOR BATTERIES', '9.99'],
   ['GOLD RECORD POLISH', '55.00'], ['NOISE COMPLAINT', '300.00'], ['ANOTHER ROUND', '88.00'], ['ANOTHER ROUND', '88.00'],
-  ['ANOTHER ROUND', '88.00'], ['TAB INTEREST', '1,212.00'], ['TOTAL', '$5,055.99']];
+  ['ANOTHER ROUND', '88.00'], ['TAB INTEREST', '1,212.00'], ['TOTAL', '$4,644.99']];
 function shot5(t) {
   const lt = t - CUTS.s5, D = CUTS.end - CUTS.s5;
   ctx.save();
@@ -666,6 +666,64 @@ function shot5(t) {
   if (out > 0) { ctx.fillStyle = `rgba(0,0,0,${easeIn(out)})`; ctx.fillRect(0, 0, W, H); }
 }
 
+
+// ====================================================================
+// LYRICS — karaoke-style. Word times are syllable onsets measured from the vocal band.
+// [word, time, emphasis]
+// ====================================================================
+const LYRICS = [
+  { from: 2.15, to: CUTS.s2, accent: '#ffb347', glow: 'rgba(255,170,70,.8)', words: [
+    ["There's", 2.40], ['only', 2.71], ['one', 3.05], ['beer', 3.24, 1], ['left', 3.49]] },
+  { from: CUTS.s2, to: CUTS.s3, accent: '#ffe14a', glow: 'rgba(255,60,160,.9)', shake: true, words: [
+    ['Rappers', 5.02], ['screaming', 5.34, 1], ['all', 5.65], ['in', 5.85], ['our', 5.96], ['ears', 6.05, 1], ['like', 6.26], ["we're", 6.44], ['deaf', 6.55, 1]] },
+  { from: CUTS.s3, to: CUTS.s4a, accent: '#f5c84a', glow: 'rgba(255,215,90,.8)', words: [
+    ['Tempt', 7.94], ['me,', 8.06], ['do', 8.17], ['a', 8.26], ['number', 8.36, 1], ['on', 8.60], ['the', 8.71], ['label', 8.82, 1]] },
+  { from: CUTS.s4a, to: CUTS.s4b, accent: '#ff7a45', glow: 'rgba(255,80,40,.9)', words: [
+    ['Eat', 9.50, 1], ['up', 9.85], ['all', 10.14], ['they', 10.68], ['emcees', 10.80, 1]] },
+  { from: CUTS.s4b, to: CUTS.s5, accent: '#6dffbe', glow: 'rgba(60,255,170,.8)', words: [
+    ['and', 11.17], ['drink', 11.32, 1], ["'em", 11.46], ['under', 11.62], ['the', 11.92], ['table', 12.02, 1]] },
+  { from: CUTS.s5, to: CUTS.end, accent: '#ff4b4b', glow: 'rgba(255,60,60,.8)', words: [
+    ['Like,', 12.79], ['"It\'s', 13.32], ['on', 13.43], ['me,', 13.54], ['put', 13.94], ['it', 14.16], ['on', 14.27], ['my', 14.40], ['tab,', 14.50, 1], ['kid"', 14.70]] },
+];
+function lyrics(t) {
+  const L = LYRICS.find(l => t >= l.from && t < l.to); if (!L) return;
+  const fadeIn = easeOut(prog(t, L.from, L.from + 0.2));
+  const fadeOut = 1 - prog(t, CUTS.end - 0.25, CUTS.end - 0.05);
+  const vis = fadeIn * fadeOut; if (vis <= 0) return;
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  // readability band
+  ctx.fillStyle = lin(0, H - 330, 0, H, [[0, 'rgba(0,0,0,0)'], [.55, `rgba(0,0,0,${.5 * vis})`], [1, `rgba(0,0,0,${.72 * vis})`]]);
+  ctx.fillRect(0, H - 330, W, 330);
+  // layout
+  const base = 96, gap = 26;
+  const fontOf = e => `900 ${Math.round(base * (e ? 1.2 : 1))}px "Inter Display", Inter, sans-serif`;
+  const widths = L.words.map(([w, , e]) => { ctx.font = fontOf(e); return ctx.measureText(w).width; });
+  let total = widths.reduce((a, b) => a + b, 0) + gap * (L.words.length - 1);
+  const fit = Math.min(1, 1720 / total);
+  let shx = 0, shy = 0;
+  if (L.shake) { const bt = onsetsIn(L.from, L.to); const h = kick(t, bt, 16); const a = (lastOnset(t, bt) * 97.3) % 6.28; shx = Math.cos(a) * 10 * h; shy = Math.sin(a) * 8 * h; }
+  ctx.translate(W / 2 + shx, H - 100 + shy); ctx.scale(fit, fit);
+  let x = -total / 2;
+  ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left'; ctx.lineJoin = 'round';
+  L.words.forEach(([w, wt, e], i) => {
+    const k = prog(t, wt, wt + 0.16), sung = t >= wt;
+    const sc = sung ? lerp(1.4, 1, backOut(k)) : 1;
+    const lift = sung ? (1 - easeOut(k)) * 26 : 0;
+    const cxw = x + widths[i] / 2;
+    ctx.save(); ctx.translate(cxw, -lift); ctx.scale(sc, sc); ctx.rotate(sung && e ? -0.04 * (1 - k) : 0);
+    ctx.font = fontOf(e);
+    ctx.globalAlpha = vis * (sung ? 1 : 0.28);
+    // outline + drop shadow
+    ctx.lineWidth = 14; ctx.strokeStyle = 'rgba(0,0,0,.85)'; ctx.strokeText(w, -widths[i] / 2, 0);
+    if (sung && e) { ctx.shadowColor = L.glow; ctx.shadowBlur = 30 + 30 * (1 - k); }
+    ctx.fillStyle = sung && e ? L.accent : '#fff';
+    ctx.fillText(w, -widths[i] / 2, 0);
+    ctx.restore();
+    x += widths[i] + gap;
+  });
+  ctx.restore();
+}
+
 // ---------- root timeline ----------
 function renderAt(t) {
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
@@ -676,6 +734,7 @@ function renderAt(t) {
   else if (t < CUTS.s4b) { shot4a(t); post(t, .5, .07); }
   else if (t < CUTS.s5) { shot4b(t); post(t, .65, .08); flash(t, CUTS.s4b, .06, '120,255,190', .3); }
   else { shot5(t); post(t, .55, .07); }
+  lyrics(t);
 }
 window.renderAt = renderAt;
 window.DURATION = CUTS.end;
