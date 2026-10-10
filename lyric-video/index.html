@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Anton&family=Special+Elite&display=swap" rel="stylesheet">
 <style>
   :root {
+    color-scheme: dark;
     --bg: #0b0a09;
     --panel: #171512;
     --line: #2c2823;
@@ -148,6 +149,17 @@ const store = {
 };
 
 function setStatus(s) { $('status').textContent = s; }
+// Inside a claude.ai artifact, files go through the downloads capability; opened locally, a plain link works.
+async function saveFile(filename, blob) {
+  let dl = null;
+  try { dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch (e) {}
+  if (dl) {
+    try { await dl.save({ filename, data: blob }); return true; }
+    catch (err) { setStatus(err && err.code === 'declined' ? 'Save cancelled.' : 'Could not save the file (' + ((err && err.code) || 'error') + ').'); return false; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  return true;
+}
 function fmt(t) { t = Math.max(0, t || 0); return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); }
 function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 function rng(seed) { let s = seed >>> 0 || 1; return () => (s = Math.imul(s ^ (s >>> 15), 2246822507) + 0x9e3779b9 >>> 0, (s >>> 8) / 16777216); }
@@ -854,7 +866,7 @@ audio.addEventListener('ended', () => { if (mode === 'sync') stopSync(syncIdx >=
 
 $('exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify({ lines: lines.length, times: times.map(x => +x.toFixed(3)) }, null, 1)], { type: 'application/json' });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'timings.json'; a.click();
+  saveFile('timings.json', blob);
 });
 $('importBtn').addEventListener('click', () => $('timingsFile').click());
 $('timingsFile').addEventListener('change', async e => {
@@ -876,12 +888,12 @@ $('recBtn').addEventListener('click', async () => {
   recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8e6 });
   recChunks = [];
   recorder.ondataavailable = e => e.data.size && recChunks.push(e.data);
-  recorder.onstop = () => {
+  recorder.onstop = async () => {
     const blob = new Blob(recChunks, { type: mime.split(';')[0] });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = (($('title').value || audioName).replace(/[^\w-]+/g, '_') || 'lyric-video') + '.' + (mime.includes('mp4') ? 'mp4' : 'webm'); a.click();
+    const name = (($('title').value || audioName).replace(/[^\w-]+/g, '_') || 'lyric-video') + '.' + (mime.includes('mp4') ? 'mp4' : 'webm');
     $('recBtn').textContent = '● Record video (.webm)'; mode = 'play';
-    setStatus('Video saved (' + (blob.size / 1e6).toFixed(1) + ' MB).');
+    setStatus('Video ready (' + (blob.size / 1e6).toFixed(1) + ' MB). Saving…');
+    if (await saveFile(name, blob)) setStatus('Video saved: ' + name + ' (' + (blob.size / 1e6).toFixed(1) + ' MB).');
   };
   mode = 'record'; lastFired = -1; props.length = 0; parts.length = 0;
   audio.currentTime = 0;
