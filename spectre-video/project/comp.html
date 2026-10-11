@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<!-- Spectre · dry-down in one take, v2 — made with onetake (PolyForm Noncommercial 1.0.0) -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Spectre · dry-down</title>
+<style>
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#000}
+canvas{position:absolute;left:0;top:0;width:1080px;height:1920px}
+#hud{position:absolute;right:12px;bottom:10px;font:14px monospace;color:#f33;display:none}
+</style>
+<script src="motion.js"></script>
+<script src="look.js"></script>
+</head>
+<body>
+<canvas id="cv"></canvas><div id="hud"></div>
+<script>
+// ───────────────────────── frame, look ─────────────────────────
+const W = 1080, H = 1920, DUR = 30, FPS = 30;
+const { clamp, lerp, seg, sstep, ssstep, ease } = OM;
+const DPR = window.devicePixelRatio || 1;
+const cv = document.getElementById('cv'); cv.width = W * DPR; cv.height = H * DPR;
+const g = cv.getContext('2d');
+const lay = document.createElement('canvas'); lay.width = cv.width; lay.height = cv.height;
+const lg = lay.getContext('2d');
+const C = LOOK.color, CREAM = '#f3ecdf', INK = '#1c1c1c';
+const F = (role, px, w) => LOOK.font(role, px, w);
+
+// ───────────────────────── world: the scene photo, full bleed ─────────────────────────
+const SC = 1920 / 1448, X0 = -180;                       // photo 1086×1448 → 1440×1920, centred
+const P = (px, py) => [X0 + px * SC, py * SC];           // photo px → world
+const AX = X0 + 537.5 * SC;                               // the bottle's vertical axis
+const GLASS = { img: 'glass', kind: 'glass', x: X0 + 326 * SC, y: 500 * SC, w: 423 * SC, h: 522 * SC, D: 0.5 * 423 * SC, strip: 22, label: [129, 110, 234, 259] };
+const CAP = { img: 'capTop', kind: 'cap', x: X0 + 409 * SC, y: 315 * SC, w: 258 * SC, h: 145 * SC, D: 0.78 * 258 * SC };
+const COLLAR = { img: 'collar', kind: 'metal', x: X0 + 457 * SC, y: 455 * SC, w: 152 * SC, h: 52 * SC, D: 0.9 * 152 * SC };
+// the dry-down lives in a page drawn in its own units inside a clear strip of glass left of the label
+const S = 30;
+const [GX, GY] = P(398, 540);
+const PX0 = GX - 540 / S, PY0 = GY, PM = [1 / S, 0, 0, 1 / S, PX0, PY0];
+const VC = [960, 3360, 5760];
+const NOTES = [
+  { label: 'TOP NOTES', w: ['Fresh', 'Spicy'], ing: ['Calabrian Bergamot', 'Pepper'], glow: '#b8d86a', shaft: 'rgba(225,240,190,1)' },
+  { label: 'HEART NOTES', w: ['Spicy', 'Floral'], ing: ['Sichuan Pepper', 'Lavender'], glow: '#9a6be0', shaft: 'rgba(215,195,255,1)' },
+  { label: 'BASE NOTES', w: ['Warm', 'Woody'], ing: ['Ambroxan', 'Cedar'], glow: '#f0a040', shaft: 'rgba(255,215,160,1)' },
+];
+
+// ───────────────────────── timeline ─────────────────────────
+const T = {
+  w: [0.35, 0.6, 1.1, 1.3], turn: [1.6, 4.3],
+  dive: [4.6, 6.4], land: [6.4, 11.6, 15.4], desc1: [10.4, 11.6], desc2: [14.6, 15.4],
+  whip: [19.2, 20.0], hits: [[20.3, 'BOLD'], [20.6, 'FRESH'], [20.9, 'WOODY'], [21.25, '']],
+  name: 21.4, call: [22.0, 22.45, 22.9], price: 23.6, made: 24.0,
+  out: [25.9, 26.9], black: [26.25, 26.8], logo: 26.55, url: 27.4, shine: [28.0, 29.1],
+};
+const C0 = { x: 540, y: 960, zoom: 1 };
+const CS = i => ({ x: GX, y: PY0 + VC[i] / S, zoom: S });
+const [LX, LY] = P(577, 657);                             // the mark on the label
+const KEYS = [
+  { t: 0, ...C0 }, { t: T.dive[0], x: 540, y: 985, zoom: 1.05, curve: ease.sineInOut },
+  { t: T.dive[1], ...CS(0), curve: ease.cubicInOut }, { t: T.desc1[0], ...CS(0) },
+  { t: T.desc1[1], ...CS(1), curve: ease.cubicInOut }, { t: T.desc2[0], ...CS(1) },
+  { t: T.desc2[1], ...CS(2), curve: ease.expoInOut }, { t: T.whip[0], ...CS(2) },
+  { t: T.whip[1], ...C0, curve: ease.expoInOut }, { t: T.out[0], x: 540, y: 960, zoom: 1.025, curve: ease.sineInOut },
+  { t: T.out[1], x: LX, y: LY, zoom: 7, curve: ease.expoIn },
+];
+const HITS = [[T.land[0], 7, 8], [T.land[1], 5, 9], [T.land[2], 9, 8], [T.whip[1], 14, 7], [T.name + 0.1, 3, 10]];
+
+function camKey(t) {        // deep zoom: key the target's screen position and log zoom (composition.md → A camera)
+  if (t <= KEYS[0].t) return { ...C0 };
+  const L = KEYS.length; if (t >= KEYS[L - 1].t) return { x: KEYS[L - 1].x, y: KEYS[L - 1].y, zoom: KEYS[L - 1].zoom };
+  let i = 0; while (KEYS[i + 1].t < t) i++;
+  const a = KEYS[i], b = KEYS[i + 1], u = (b.curve || ease.cubicInOut)(seg(t, a.t, b.t));
+  const z = Math.exp(lerp(Math.log(a.zoom), Math.log(b.zoom), u));
+  if (b.zoom >= a.zoom) {
+    const sx = lerp(W / 2 + (b.x - a.x) * a.zoom, W / 2, u), sy = lerp(H / 2 + (b.y - a.y) * a.zoom, H / 2, u);
+    return { x: b.x + (W / 2 - sx) / z, y: b.y + (H / 2 - sy) / z, zoom: z };
+  }
+  const sx = lerp(W / 2, W / 2 + (a.x - b.x) * b.zoom, u), sy = lerp(H / 2, H / 2 + (a.y - b.y) * b.zoom, u);
+  return { x: a.x + (W / 2 - sx) / z, y: a.y + (H / 2 - sy) / z, zoom: z };
+}
+// an operator's hand inside the strata: a slow float, zero on the outside where the bottle turns
+const handEnv = t => sstep(T.dive[1] - 0.2, T.dive[1] + 0.8, t) * (1 - sstep(T.whip[0] - 0.4, T.whip[0], t));
+function camAt(t) {
+  const c = camKey(t), e = handEnv(t) * 9;
+  let x = c.x + e * (Math.sin(0.9 * t) + 0.5 * Math.sin(1.7 * t + 1)) / c.zoom, y = c.y + e * (Math.sin(0.7 * t + 2) + 0.4 * Math.sin(1.9 * t)) / c.zoom;
+  let rot = 0.010 * Math.sin(Math.PI * seg(t, ...T.desc1)) - 0.012 * Math.sin(Math.PI * seg(t, ...T.desc2)) + handEnv(t) * 0.004 * Math.sin(0.5 * t);
+  for (const [th, amp, decay] of HITS) { const s = OM.shake(t, th, { amp, decay, seed: Math.round(th * 100) }); x -= s.x / c.zoom; y -= s.y / c.zoom; rot += s.rot; }
+  return { x, y, zoom: c.zoom, rot };
+}
+const viewOf = c => OM.view(c, { W, H });
+const mul = (A, B) => [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
+const setT = (ctx, M) => ctx.setTransform(DPR * M[0], DPR * M[1], DPR * M[2], DPR * M[3], DPR * M[4], DPR * M[5]);
+
+// ───────────────────────── assets ─────────────────────────
+const IMG = {};
+function loadImg(k, src) { return new Promise(r => { const i = new Image(); i.onload = () => r(); i.onerror = () => r(); i.src = src; IMG[k] = i; }); }
+const LIST = { scene: 'img2/scene.jpg', plate: 'img2/plate.jpg', glass: 'img2/glass.png', capTop: 'img2/cap_top.png', collar: 'img2/collar.png', labelBack: 'img2/label_back.png',
+  lime: 'img2/lime.png', lav: 'img2/lav1.png', amber: 'img2/amber.png', wood: 'img2/wood2.png',
+  g0: 'img2/grain0.png', g1: 'img2/grain1.png', g2: 'img2/grain2.png', g3: 'img2/grain3.png', g4: 'img2/grain4.png',
+  a0: 'img/top_air.png', a1: 'img/heart_air.png', a2: 'img/base_air.png' };
+const assets = Promise.all(Object.entries(LIST).map(([k, s]) => loadImg(k, s)));
+let NOISE = null, LOGO = null;
+function makeNoise() {
+  const n = document.createElement('canvas'); n.width = n.height = 256; const x = n.getContext('2d'), d = x.createImageData(256, 256), r = OM.rng(5);
+  for (let i = 0; i < d.data.length; i += 4) { const w = r() < 0.5 ? 255 : 0; d.data[i] = d.data[i + 1] = d.data[i + 2] = w; d.data[i + 3] = Math.floor(r() * 7); }
+  x.putImageData(d, 0, 0); NOISE = g.createPattern(n, 'repeat');
+}
+
+// ───────────────────────── type helpers ─────────────────────────
+function tracked(ctx, str, x, y, track, align = 'left') {
+  const ws = [...str].map(ch => ctx.measureText(ch).width), tw = ws.reduce((a, b) => a + b, 0) + track * (ws.length - 1);
+  let cx = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x;
+  const al = ctx.textAlign; ctx.textAlign = 'left';
+  [...str].forEach((ch, i) => { ctx.fillText(ch, cx, y); cx += ws[i] + track; });
+  ctx.textAlign = al; return tw;
+}
+function rise(ctx, str, x, y, t0, t, opts = {}, align = 'left') {
+  const w = OM.wordRise(t, t0, opts); if (w.op <= 0) return;
+  ctx.save(); ctx.globalAlpha *= w.op; ctx.textAlign = align; ctx.translate(x, y + w.y); ctx.scale(w.s, w.s); ctx.fillText(str, 0, 0); ctx.restore();
+}
+function letters(ctx, str, widths, cx, y, t0, t, track, opts) {
+  const tw = widths.reduce((a, b) => a + b, 0) + track * (widths.length - 1); let x = cx - tw / 2;
+  [...str].forEach((ch, i) => { const d = OM.letterDrop(t, t0, i, opts); if (d.op > 0) {
+    ctx.save(); ctx.globalAlpha *= d.op; ctx.translate(x + widths[i] / 2, y - d.y); ctx.scale(d.sx, d.sy); ctx.fillText(ch, -widths[i] / 2, 0); ctx.restore(); }
+    x += widths[i] + track; });
+}
+let ZS = 1;
+const shadowed = (ctx, blur, a = 0.55) => { ctx.shadowColor = `rgba(0,0,0,${a})`; ctx.shadowBlur = blur * DPR * ZS; ctx.shadowOffsetY = 2 * DPR * ZS; };
+const unshadow = ctx => { ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0; };
+
+// ───────────────────────── the bottle turns in place (2.5D: two boxes, faces from the photo) ─────────────────────────
+function face(ctx, img, sx, sw, x0, x1, y, h, back) {
+  const k = (x1 - x0) / sw; if (Math.abs(x1 - x0) < 0.5) return;
+  ctx.save(); ctx.translate(x0, y); ctx.scale(k, 1);
+  ctx.drawImage(img, sx, 0, sw, img.naturalHeight, 0, 0, sw, h);
+  if (back) back(ctx);
+  ctx.restore();
+}
+function box(ctx, B, th) {
+  const img = IMG[B.img], iw = img.naturalWidth, c = Math.cos(th), s = Math.sin(th), hw = B.w / 2, hd = B.D / 2;
+  const sides = [];
+  if (s > 0.001) sides.push([AX - hw * c - hd * s, AX - hw * c + hd * s]);           // left face
+  if (s < -0.001) sides.push([AX + hw * c - hd * s, AX + hw * c + hd * s]);           // right face
+  for (const [a, b] of sides) {
+    const x0 = Math.min(a, b), wd = Math.abs(b - a); if (wd < 0.5) continue;
+    const gr = ctx.createLinearGradient(x0, 0, x0 + wd, 0), lit = 0.5 + 0.5 * Math.sin(th * 2);
+    if (B.kind === 'glass') { gr.addColorStop(0, 'rgba(255,255,255,.5)'); gr.addColorStop(0.04, 'rgba(120,135,150,.10)'); gr.addColorStop(0.5, `rgba(60,75,90,${0.06 + 0.06 * lit})`); gr.addColorStop(0.96, 'rgba(90,105,120,.14)'); gr.addColorStop(1, 'rgba(255,255,255,.55)'); }
+    else if (B.kind === 'cap') { gr.addColorStop(0, '#2c2d31'); gr.addColorStop(0.3, '#0b0b0d'); gr.addColorStop(0.55 + 0.2 * lit, `rgb(${60 + 50 * lit},${62 + 50 * lit},${68 + 50 * lit})`); gr.addColorStop(1, '#0d0d10'); }
+    else { gr.addColorStop(0, '#6c7076'); gr.addColorStop(0.4, '#d9dde2'); gr.addColorStop(0.7, '#8d9298'); gr.addColorStop(1, '#4b4e53'); }
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.roundRect(x0, B.y + (B.kind === 'glass' ? 2 : 0), wd, B.h - (B.kind === 'glass' ? 4 : 0), B.kind === 'glass' ? 10 : 3); ctx.fill();
+  }
+  if (c > 0.001) face(ctx, img, 0, iw, AX - hw * c + hd * s, AX + hw * c + hd * s, B.y, B.h);
+  if (c < -0.001) face(ctx, img, 0, iw, AX - hw * c - hd * s, AX + hw * c - hd * s, B.y, B.h, B.label ? (cx) => {   // far side: the label's paper back
+    const [lx, ly, lw, lh] = B.label, kk = B.h / img.naturalHeight; cx.globalAlpha = 1; cx.drawImage(IMG.labelBack, lx, ly * kk, lw, lh * kk); } : null);
+  // a specular sweep across whatever faces the light
+  const Lx = AX - B.w * 0.55 * Math.sin(th), wd = Math.abs(Math.sin(th)) * 0.45;
+  if (wd > 0.01) {
+    const half = hw * Math.abs(c) + hd * Math.abs(s), gr = ctx.createLinearGradient(Lx - 90, 0, Lx + 90, 0);
+    gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, `rgba(255,255,255,${wd})`); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = gr; ctx.fillRect(AX - half, B.y + 4, 2 * half, B.h - 8); ctx.restore();
+  }
+}
+const turnAt = t => 2 * Math.PI * ease.cubicInOut(seg(t, ...T.turn));
+// mist: slow soft banks drifting across the valley
+function mist(ctx, t, y0, y1, n, a) {
+  const r = OM.rng(77);
+  for (let i = 0; i < n; i++) {
+    const sp = 8 + r() * 14, x = ((r() * 1800 + sp * t) % 1800) - 360, y = y0 + r() * (y1 - y0), rx = 260 + r() * 300, ry = 60 + r() * 70;
+    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, 1); gr.addColorStop(0, `rgba(235,240,245,${a})`); gr.addColorStop(1, 'rgba(235,240,245,0)');
+    ctx.save(); ctx.translate(x, y); ctx.scale(rx, ry); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, 1, 0, 6.283); ctx.fill(); ctx.restore();
+  }
+}
+
+// ───────────────────────── the strata, with the photo's own ingredients floating in them ─────────────────────────
+const R = OM.rng(11);
+const GR = [['g0', 'g4'], ['g1', 'g3', 'g2'], ['g2', 'g1']];
+const FLOAT = [0, 1, 2].map(i => Array.from({ length: i === 2 ? 8 : 12 }, () => ({ k: GR[i][Math.floor(R() * GR[i].length)], u: -40 + R() * 1160, v: VC[i] - 1050 + R() * 2100, r: 16 + R() * 26, pz: -0.6 + R() * 1.2, ph: R() * 6.28, sp: 0.4 + R() * 0.5 })));
+// [img, u, v, width, pz, blur, rot, flip, amp, phase]
+const HERO = [
+  [['lime', 790, 330, 560, 0.0, 0, -0.12, false, 26, 0.3], ['lime', 150, 820, 760, -0.45, 14, 0.5, true, 34, 1.9], ['lime', 1020, -560, 300, 0.45, 7, 2.2, false, 18, 4.1]],
+  [['lav', 720, 260, 500, 0.0, 0, 0.08, false, 22, 0.8], ['lav', 980, 330, 300, 0.25, 5, -0.18, true, 18, 2.4], ['lav', 120, 900, 520, -0.5, 16, 0.35, true, 30, 5.0], ['lav', 560, -600, 220, 0.5, 8, -0.4, false, 14, 3.3]],
+  [['amber', 800, -40, 540, 0.0, 0, 0.1, false, 24, 0.6], ['wood', 620, 760, 820, -0.45, 12, -0.2, false, 30, 2.0], ['amber', 160, -620, 300, 0.4, 8, 2.6, true, 16, 3.7]],
+];
+function sprite(ctx, img, x, y, w, rot, flip, blur, alpha) {
+  if (!img || !img.complete || !img.naturalWidth || alpha <= 0) return;
+  const h = w * img.naturalHeight / img.naturalWidth;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.translate(x, y); ctx.rotate(rot); ctx.scale(flip ? -1 : 1, 1);
+  if (blur > 0.3) ctx.filter = `blur(${(blur * DPR * ZS).toFixed(2)}px)`;
+  ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+}
+function glow(ctx, x, y, r, col, a) {
+  const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(x - r, y - r, 2 * r, 2 * r); ctx.restore();
+}
+function shafts(ctx, vc, col, t) {        // light falling through the scene, breathing slowly
+  ctx.save(); ctx.globalCompositeOperation = 'screen';
+  for (let k = 0; k < 3; k++) {
+    const x = 300 + k * 330 + 60 * Math.sin(0.23 * t + k * 2), a = 0.07 + 0.04 * Math.sin(0.6 * t + k * 1.7), w = 140 + 60 * k;
+    ctx.save(); ctx.translate(x, vc - 1100); ctx.rotate(0.32);
+    const gr = ctx.createLinearGradient(-w, 0, w, 0); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.5, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(-w, 0, 2 * w, 2600); ctx.restore();
+  }
+  ctx.restore();
+}
+const GROUND = [[-1000, '#16201a'], [960, '#18241a'], [2160, '#17151f'], [3360, '#1d1430'], [4560, '#1e130d'], [5760, '#24150b'], [7700, '#100905']];
+function drawPage(ctx, t, camV, vis) {
+  const gr = ctx.createLinearGradient(0, -1000, 0, 7700);
+  for (const [v, c] of GROUND) gr.addColorStop((v + 1000) / 8700, c);
+  ctx.fillStyle = gr; ctx.fillRect(-2600, -1000, 6280, 8700);
+  ctx.fillStyle = 'rgba(243,236,223,.22)'; ctx.fillRect(68, -400, 2, 7000);
+  for (let v = 0; v <= 6600; v += 120) ctx.fillRect(68, v, v % 600 === 0 ? 34 : 16, 2);
+  for (let i = 0; i < 3; i++) {
+    const vc = VC[i], N = NOTES[i], L = T.land[i];
+    if (vc + 1500 < vis[0] || vc - 1500 > vis[1]) continue;
+    const par = pz => (camV - vc) * pz;
+    const air = IMG['a' + i]; if (air && air.complete) { ctx.globalAlpha = 0.85; ctx.drawImage(air, -160 + 30 * Math.sin(0.15 * t + i), vc - 1300 + par(0.2), 1400, 2560); ctx.globalAlpha = 1; }
+    glow(ctx, 760, vc + 120 + par(0.3), 1000, N.glow, 0.20 + 0.05 * Math.sin(0.5 * t + i));
+    shafts(ctx, vc + par(0.3), N.shaft, t);
+    // far → near: heroes sorted by depth, grains in between
+    const items = [...HERO[i].map(h => ({ h, z: h[4] })), ...FLOAT[i].map(f => ({ f, z: f.pz }))].sort((a, b) => b.z - a.z);
+    for (const it of items) {
+      if (it.h) {
+        const [k, u, v, w, pz, bl, r0, flip, amp, ph] = it.h, p = OM.popIn(t, L - 0.35 + 0.12 * (1 + pz), { rise: 280, s0: 0.86, ds: 0.14, zeta: 0.7, omega: 9 });
+        const fx = amp * Math.sin(0.55 * t + ph), fy = amp * 0.9 * Math.sin(0.42 * t + ph * 1.3) + p.dy, rr = r0 + 0.06 * Math.sin(0.33 * t + ph);
+        sprite(ctx, IMG[k], u + fx, vc + v + fy + par(pz), w * p.s, rr, flip, bl, p.op * (pz > 0.3 ? 0.75 : 1));
+      } else {
+        const f = it.f, fx = 30 * Math.sin(f.sp * t + f.ph), fy = 40 * Math.sin(f.sp * 0.8 * t + f.ph * 2) - 14 * (t - L);
+        const bl = Math.abs(f.pz) > 0.35 ? 5 * Math.abs(f.pz) : 0;
+        sprite(ctx, IMG[f.k], f.u + fx, f.v + fy + par(f.pz), f.r * 2 * (1 - 0.45 * f.pz), f.ph + 0.4 * t * f.sp, false, bl, 0.9 * sstep(L - 0.6, L, t));
+      }
+    }
+    // the words
+    ctx.fillStyle = CREAM; ctx.textBaseline = 'alphabetic'; shadowed(ctx, 18, 0.5);
+    ctx.font = F('text', 26, 500); ctx.globalAlpha = 0.78 * OM.wordRise(t, L + 0.05).op; tracked(ctx, N.label, 130, vc - 640, 8); ctx.globalAlpha = 1;
+    ctx.font = F('display', 176);
+    rise(ctx, N.w[0], 124, vc - 460, L + 0.22, t, { dist: 60 });
+    rise(ctx, N.w[1], 124, vc - 300, L + 0.36, t, { dist: 60 });
+    ctx.font = F('text', 46, 500);
+    N.ing.forEach((s, k) => { const m = OM.maskRise(t, L + 0.7, k, { dist: 60 }); if (!m.visible) return;
+      ctx.save(); ctx.beginPath(); ctx.rect(110, vc - 170 + k * 70 - 52, 800, 68); ctx.clip(); ctx.fillText(s, 130, vc - 170 + k * 70 + m.y); ctx.restore(); });
+    unshadow(ctx);
+    ctx.globalAlpha = 0.5 * sstep(L + 0.6, L + 1.0, t); ctx.fillRect(130, vc - 250, 260 * ssstep(L + 0.6, L + 1.1, t), 2); ctx.globalAlpha = 1;
+  }
+}
+function pageMask(ctx) {
+  ctx.globalCompositeOperation = 'destination-in';
+  let gr = ctx.createLinearGradient(-1700, 0, 2780, 0);
+  gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1200 / 4480, '#000'); gr.addColorStop(3280 / 4480, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gr; ctx.fillRect(-1700, -1200, 4480, 9200);
+  gr = ctx.createLinearGradient(0, -1200, 0, 8000);
+  gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1000 / 9200, '#000'); gr.addColorStop(7900 / 9200, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gr; ctx.fillRect(-1700, -1200, 4480, 9200);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+// ───────────────────────── outside: the valley, the bottle, the callouts ─────────────────────────
+let LINES, NAMEW;
+function measure() {
+  g.setTransform(1, 0, 0, 1, 0, 0); g.font = F('display', 96);
+  const sp = g.measureText(' ').width;
+  const line = ws => { const w = ws.map(s => g.measureText(s).width), tw = w.reduce((a, b) => a + b, 0) + sp * (w.length - 1); let x = 540 - tw / 2; return ws.map((s, i) => { const o = { s, x }; x += w[i] + sp; return o; }); };
+  LINES = [line(['Wide-open', 'landscapes,']), line(['in', 'one', 'bottle.'])];
+  g.font = F('display', 150); NAMEW = [...'SPECTRE'].map(ch => g.measureText(ch).width);
+}
+function scrims(ctx, a) {
+  if (a <= 0) return;
+  let gr = ctx.createLinearGradient(0, 0, 0, 760); gr.addColorStop(0, 'rgba(10,10,12,.62)'); gr.addColorStop(1, 'rgba(10,10,12,0)');
+  ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = gr; ctx.fillRect(-200, -200, 1480, 960);
+  gr = ctx.createLinearGradient(0, 1380, 0, 1920); gr.addColorStop(0, 'rgba(8,6,5,0)'); gr.addColorStop(1, 'rgba(8,6,5,.78)');
+  ctx.fillStyle = gr; ctx.fillRect(-200, 1380, 1480, 700); ctx.restore();
+}
+// a callout: a dot on the ingredient, an elbow line that draws itself, then the words
+function callout(ctx, t, t0, pts, tx, ty, align, N) {
+  const d = OM.popIn(t, t0, { rise: 0, s0: 0, ds: 1, zeta: 0.5, omega: 18 }); if (d.op <= 0) return;
+  const segs = []; let total = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push(l); total += l; }
+  const k = ease.cubicOut(seg(t, t0 + 0.1, t0 + 0.75)) * total;
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [col, lw] of [['rgba(0,0,0,.45)', 5.5], [CREAM, 2.6]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(...pts[0]); let left = k;
+    for (let i = 1; i < pts.length && left > 0; i++) { const f = Math.min(1, left / segs[i - 1]); ctx.lineTo(lerp(pts[i - 1][0], pts[i][0], f), lerp(pts[i - 1][1], pts[i][1], f)); left -= segs[i - 1]; }
+    ctx.stroke();
+  }
+  ctx.fillStyle = CREAM; ctx.globalAlpha = d.op; ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], 7 * d.s, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = CREAM; ctx.lineWidth = 1.5; ctx.globalAlpha = d.op * (1 - seg(t, t0, t0 + 1.2)); ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], 7 + 26 * seg(t, t0, t0 + 1.2), 0, 6.283); ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = CREAM; shadowed(ctx, 14, 0.6);
+  const t1 = t0 + 0.55;
+  ctx.font = F('text', 22, 500); { const w = OM.wordRise(t, t1); if (w.op > 0) { ctx.save(); ctx.globalAlpha = 0.8 * w.op; tracked(ctx, N.label, tx, ty + w.y, 6, align); ctx.restore(); } }
+  ctx.font = F('display', 58); rise(ctx, N.w.join(' '), tx, ty + 58, t1 + 0.08, t, { dist: 30 }, align);
+  ctx.font = F('text', 25, 400); N.ing.forEach((s2, j) => rise(ctx, s2, tx, ty + 96 + j * 32, t1 + 0.16 + j * 0.06, t, { dist: 20 }, align));
+  unshadow(ctx); ctx.restore();
+}
+function drawOutside(ctx, t, cam) {
+  const th = turnAt(t), turning = th > 0.0005 && th < 2 * Math.PI - 0.0005;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(turning ? IMG.plate : IMG.scene, X0, 0, 1440, 1920);
+  if (turning) { box(ctx, GLASS, th); box(ctx, COLLAR, th); box(ctx, CAP, th); }
+  mist(ctx, t, 820, 1260, 9, 0.10);
+  // opening line, ink on the sky — carried off by the dive
+  if (t < T.dive[1]) { ctx.fillStyle = INK; ctx.font = F('display', 96); ctx.textBaseline = 'alphabetic';
+    const wt = [[T.w[0], T.w[1]], [T.w[2], T.w[2] + 0.1, T.w[3]]];
+    LINES.forEach((ln, j) => ln.forEach((o, i) => rise(ctx, o.s, o.x, j ? 275 : 170, wt[j][i], t, { dist: 40 }))); }
+  // after the whip: hits, then the bottle with its notes pointed out, and the price
+  if (t >= T.whip[1] - 0.3) {
+    ctx.save(); ctx.globalAlpha = 1 - sstep(T.out[0], T.out[0] + 0.3, t);
+    scrims(ctx, sstep(T.whip[1] - 0.2, T.whip[1] + 0.4, t));
+    ctx.fillStyle = CREAM; shadowed(ctx, 22, 0.5); ctx.font = F('display', 150);
+    letters(ctx, 'SPECTRE', NAMEW, 540, 215, T.name, t, 14, { stagger: 0.05, dist: 60 });
+    ctx.font = F('text', 28, 500); { const m = OM.maskRise(t, T.name + 0.45, 0, { dist: 40 }); if (m.visible) { ctx.save(); ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.rect(0, 238, W, 44); ctx.clip(); tracked(ctx, 'EAU DE PARFUM', 540, 272 + m.y, 10, 'center'); ctx.restore(); } }
+    unshadow(ctx);
+    const [lmx, lmy] = P(200, 930), [lvx, lvy] = P(842, 690), [amx, amy] = P(905, 985);
+    callout(ctx, t, T.call[0], [[lmx, lmy], [150, lmy - 120], [150, 470]], 52, 360, 'left', NOTES[0]);
+    callout(ctx, t, T.call[1], [[lvx, lvy], [962, lvy - 140], [962, 470]], 1028, 360, 'right', NOTES[1]);
+    callout(ctx, t, T.call[2], [[amx, amy], [1000, amy + 160], [1000, 1460]], 1028, 1500, 'right', NOTES[2]);
+    ctx.fillStyle = CREAM; shadowed(ctx, 14, 0.6);
+    ctx.font = F('text', 34, 400); rise(ctx, '12 ml  ·  50 ml  ·  100 ml', 540, 1712, T.price, t, {}, 'center');
+    ctx.font = F('text', 52, 600); rise(ctx, 'from ₹250', 540, 1782, T.price + 0.15, t, { zeta: 0.5 }, 'center');
+    ctx.font = F('text', 26, 400); rise(ctx, 'Handcrafted in Kannauj, India', 540, 1832, T.made, t, {}, 'center');
+    unshadow(ctx); ctx.restore();
+  }
+}
+function drawHits(ctx, t) {
+  const h = OM.staccato(t, T.hits); if (!h.word || t >= T.hits[T.hits.length - 1][0]) return;
+  ctx.fillStyle = CREAM; ctx.font = F('text', 84, 700); shadowed(ctx, 20, 0.5); tracked(ctx, h.word, 540, 420, 24, 'center'); unshadow(ctx);
+}
+
+// ───────────────────────── the house: black, and the logo (vector stand-in until the logo file is supplied) ─────────────────────────
+function buildLogo() {
+  const c = document.createElement('canvas'), k = 2; c.width = 1540 * k; c.height = 330 * k; const x = c.getContext('2d'); x.scale(k, k);
+  x.fillStyle = '#fff';
+  x.beginPath(); x.moveTo(150, 8); x.quadraticCurveTo(118, 150, 4, 212); x.lineTo(296, 212); x.quadraticCurveTo(182, 150, 150, 8); x.closePath();
+  x.moveTo(150, 70); x.quadraticCurveTo(112, 150, 150, 212); x.quadraticCurveTo(188, 150, 150, 70); x.closePath();
+  x.fill('evenodd');
+  x.font = F('mono', 236, 800); x.textBaseline = 'alphabetic';
+  const ws = [...'AROMAK'].map(ch => x.measureText(ch).width), tr = 16, tw = ws.reduce((a, b) => a + b, 0) + tr * 5, sc = 1190 / tw;
+  x.save(); x.translate(330, 212); x.scale(sc, 1); let cx = 0; [...'AROMAK'].forEach((ch, i) => { x.fillText(ch, cx, 0); cx += ws[i] + tr; }); x.restore();
+  x.font = F('text', 40, 300); const sub = 'PERFUME HOUSE', sw = [...sub].map(ch => x.measureText(ch).width), st = 26, stw = sw.reduce((a, b) => a + b, 0) + st * (sub.length - 1);
+  let sx = 925 - stw / 2; [...sub].forEach((ch, i) => { x.fillText(ch, sx, 305); sx += sw[i] + st; });
+  x.fillRect(255, 290, 925 - stw / 2 - 40 - 255, 2.5); x.fillRect(925 + stw / 2 + 40, 290, 1385 - (925 + stw / 2 + 40), 2.5);
+  return c;
+}
+let SHINE = null;
+function drawEnd(ctx, t) {
+  const b = sstep(...T.black, t); if (b <= 0) return;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.globalAlpha = b; ctx.fillStyle = '#060606'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  const p = OM.popIn(t, T.logo, { rise: 0, s0: 1.35, ds: -0.35, zeta: 0.85, omega: 7 }); if (p.op <= 0) return;
+  const w = 900 * p.s, h = w * LOGO.height / LOGO.width, x = 540 - w / 2, y = 900 - h / 2;
+  ctx.globalAlpha = p.op; ctx.drawImage(LOGO, x, y, w, h);
+  const u = seg(t, ...T.shine);
+  if (u > 0 && u < 1) {
+    if (!SHINE) { SHINE = document.createElement('canvas'); SHINE.width = LOGO.width; SHINE.height = LOGO.height; }
+    const s = SHINE.getContext('2d'); s.globalCompositeOperation = 'source-over'; s.clearRect(0, 0, SHINE.width, SHINE.height);
+    s.drawImage(LOGO, 0, 0); s.globalCompositeOperation = 'source-in';
+    const cx = lerp(-0.2, 1.2, ease.sineInOut(u)) * SHINE.width, gr = s.createLinearGradient(cx - 220, 0, cx + 220, 0);
+    gr.addColorStop(0, 'rgba(232,208,150,0)'); gr.addColorStop(0.5, 'rgba(232,208,150,1)'); gr.addColorStop(1, 'rgba(232,208,150,0)');
+    s.fillStyle = gr; s.fillRect(0, 0, SHINE.width, SHINE.height); ctx.drawImage(SHINE, x, y, w, h);
+  }
+  ctx.globalAlpha = 1; ctx.fillStyle = CREAM; ctx.font = F('text', 30, 400);
+  const wu = OM.wordRise(t, T.url); if (wu.op > 0) { ctx.save(); ctx.globalAlpha = wu.op * 0.7; tracked(ctx, 'aromak.in', 540, 1060 + wu.y, 9, 'center'); ctx.restore(); }
+}
+
+// ───────────────────────── frame ─────────────────────────
+let CAM = C0, TRACK = {};
+function seek(t) {
+  CAM = camAt(t); const M = viewOf(CAM), z = CAM.zoom;
+  g.setTransform(DPR, 0, 0, DPR, 0, 0); g.globalAlpha = 1; g.fillStyle = '#0b0d10'; g.fillRect(0, 0, W, H);
+  const pA = t > T.out[0] - 0.1 ? 0 : sstep(2.6, 17, z);
+  ZS = z;
+  setT(g, M);
+  if (pA < 0.999) drawOutside(g, t, CAM);
+  const camV = (CAM.y - PY0) * S, half = (H / 2) / z * S;
+  if (pA > 0.001) {
+    ZS = z / S;
+    lg.setTransform(1, 0, 0, 1, 0, 0); lg.clearRect(0, 0, lay.width, lay.height);
+    setT(lg, mul(M, PM)); drawPage(lg, t, camV, [camV - half * 1.3, camV + half * 1.3]); pageMask(lg);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = pA; g.drawImage(lay, 0, 0); g.globalAlpha = 1;
+  }
+  ZS = 1;
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (pA > 0.001) {
+    const vg = g.createRadialGradient(540, 960, 480, 540, 960, 1250); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.6)');
+    g.globalAlpha = pA; g.fillStyle = vg; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
+  }
+  drawHits(g, t);
+  drawEnd(g, t);
+  if (NOISE) { g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = NOISE; g.fillRect(0, 0, cv.width, cv.height); }
+  TRACK = {
+    bottle: { ...OM.projectBox(M, { x: GLASS.x, y: CAP.y, w: GLASS.w, h: GLASS.y + GLASS.h - CAP.y }), op: pA < 0.999 && t < T.black[1] ? 1 : 0 },
+    strata: { ...OM.projectBox(mul(M, PM), { x: 0, y: VC[0] - 960, w: 1080, h: VC[2] - VC[0] + 1920 }), op: pA > 0.001 ? Math.max(pA, 0.3) : 0 },
+    name: { ...OM.projectBox(M, { x: 220, y: 100, w: 640, h: 190 }), op: t >= T.name && t < T.black[1] ? 1 : 0 },
+    // the mark on the label grows into the house's logo: one element across the cut to black
+    logo: t < T.logo ? { ...OM.projectBox(M, { x: LX - 50, y: LY - 43, w: 100, h: 86 }), op: t > T.out[0] ? 1 : 0 } : { x: 90, y: 805, w: 900, h: 190, op: 1 },
+  };
+  document.getElementById('hud').textContent = `t=${t.toFixed(3)} z=${z.toFixed(2)}`;
+  return Promise.resolve();
+}
+
+window.__meta = { dur: DUR, fps: FPS, cuts: T.hits.map(h => h[0]),
+  inFrame: { bottle: [0.5, 4.5, 'whole'], strata: [7.0, 19.0], name: [22.0, 25.8, 'whole'], logo: [27.0, DUR, 'whole'] } };
+window.__track = t => { seek(t); return TRACK; };
+window.__motion = (t0, t1) => {
+  const c0 = camAt(t0), c1 = camAt(t1), cm = camAt((t0 + t1) / 2);
+  const d = OM.screenTravel(c0, c1, cm, { W, H });
+  const th = Math.abs(turnAt(t1) - turnAt(t0)) * GLASS.w / 2;
+  const inside = handEnv((t0 + t1) / 2) > 0.01 ? 12 : 0;
+  const active = [T.w[0], ...T.land, T.name, ...T.call, T.price, T.made, T.logo, T.url].some(a => t1 >= a && t0 <= a + 0.8) ? 40 : 0;
+  return Math.max(d, th, inside, active, 3);
+};
+window.__seek = async t => { await seek(t); return true; };
+window.__events = () => ({ T, keys: KEYS.map(k => ({ t: k.t, zoom: k.zoom })) });
+window.__ready = Promise.all([LOOK.ready, assets]).then(() => { makeNoise(); measure(); LOGO = buildLogo(); return seek(0); });
+const q = new URLSearchParams(location.search);
+if (q.has('t')) __ready.then(() => seek(parseFloat(q.get('t'))));
+if (q.has('hud')) document.getElementById('hud').style.display = 'block';
+if (q.has('play')) __ready.then(() => { const t0 = performance.now(); (function loop() { seek(((performance.now() - t0) / 1000) % DUR); requestAnimationFrame(loop); })(); });
+</script>
+</body>
+</html>

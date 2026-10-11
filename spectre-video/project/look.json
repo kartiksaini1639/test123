@@ -1,0 +1,32 @@
+{
+  "name": "aromak",
+  "from": "aromak.in product page screenshots (Spectre)",
+  "mood": "Aromak's cream page and black serif outside; the note photographs' dark lime, violet and amber inside",
+  "color": {
+    "ground": "#f2eee4",
+    "deep": "#e7e1d3",
+    "card": "#faf7f0",
+    "line": "#d9d2c3",
+    "mute": "#7d776c",
+    "ink": "#1c1c1c",
+    "accent": "#845434",
+    "accent2": "#6d4fb0"
+  },
+  "type": {
+    "display": {
+      "face": "Instrument Serif",
+      "weight": 400,
+      "tracking": 0
+    },
+    "text": {
+      "face": "Inter",
+      "weight": 500,
+      "tracking": 0
+    },
+    "mono": {
+      "face": "Fraunces",
+      "weight": 800,
+      "tracking": 0
+    }
+  }
+}
