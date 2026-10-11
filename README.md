@@ -1,6 +1,43 @@
 # Sadhana 🪷
 
-An iPhone app that times and tracks your daily meditation and yoga practice, and saves every session to **Apple Health**.
+Time and track your daily meditation and yoga practice, and save every session to **Apple Health**.
+
+There are two versions:
+
+- **Web app (`docs/`)**: install it from Safari, no Mac needed. **Start here.**
+- **Native iOS app (`Sadhana/`)**: SwiftUI + HealthKit. Needs a Mac with Xcode (see below).
+
+## 📱 Install the web app on your iPhone
+
+1. **Turn on GitHub Pages (one time):** go to the repo's **Settings → Pages**. Under *Build and deployment*, choose **Deploy from a branch**, pick the branch this app is on (`claude/sadhana-ios-app`, or `main` after merging) and the **`/docs`** folder, then press **Save**. After about a minute the app is live at **https://kartiksaini1639.github.io/test123/**.
+2. Open that link in **Safari** on your iPhone.
+3. Tap **Share** (the square with an arrow) → **Add to Home Screen** → **Add**.
+4. Open **Sadhana** from your Home Screen. It runs full-screen like a normal app and works offline.
+
+### Connect Apple Health (one time, about 2 minutes)
+
+A web app can't write to Apple Health directly, so it uses two tiny Apple Shortcuts. The full steps are in **Settings → Apple Health** inside the app:
+
+| Shortcut name | Action | Settings |
+|---|---|---|
+| `Sadhana Mindful` | **Log Health Sample** | Type **Mindful Minutes**, value = **Shortcut Input** (minutes) |
+| `Sadhana Yoga` | **Log Workout** | Type **Yoga**, duration = **Shortcut Input** (minutes) |
+
+Then turn on **Save sessions to Apple Health** in the app. After each session, tap **Save to Apple Health**: the shortcut runs and you swipe back to Sadhana.
+
+### What's inside
+
+- **Today**: a progress ring for your routine, your day streak, minutes today and a 7-day strip. **Begin today's practice** runs Kapalbhati → Tumo → Om → Shunya → Yoga back to back, skipping any you've already done today.
+- **Timer**: a breathing gradient orb, a countdown ring, a singing-bowl bell at the start and end, and optional interval bells (good for Tumo rounds). The screen stays awake while it runs. Time stays correct if you leave the app, and the session survives the app being closed.
+- **Guided videos**: your YouTube guides play inside the timer screen.
+- **History**: current and best streak, minutes this week, a 14-day chart by practice and a 5-week consistency calendar. Tap any session to resend it to Health or delete it, and use **+** to log a session you did without the timer.
+- **Settings**: duration, interval bell and routine membership for each practice, plus backup export and import.
+
+Known web-app limits on iPhone: the bell can't ring while the app is in the background (it rings when you return), and reminders have to be set up as a Shortcuts automation (steps in Settings). Data is stored on the phone. Use **Export backup** now and then.
+
+---
+
+## Native iOS app (SwiftUI)
 
 | Practice | Default | Saved in Apple Health as | Guide |
 |---|---|---|---|
