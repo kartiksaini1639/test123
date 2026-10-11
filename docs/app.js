@@ -205,7 +205,7 @@ function unlockAudio() {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (Ctx) actx = new Ctx();
   }
-  if (actx && actx.state === 'suspended') actx.resume();
+  if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
 }
 function bell(strikes = 1) {
   if (!actx) return;
@@ -588,10 +588,15 @@ function renderTimer() {
   const steps = multi ? `<div class="steps">${T.queue.map((_, i) => `<span class="${i < T.index ? 'done' : i === T.index ? 'now' : ''}"></span>`).join('')}</div>` : '';
   const video = p.video ? `
     <section class="card video-card">
-      <div class="card-head"><h3>Guided video</h3><a href="https://youtu.be/${p.video}" target="_blank" rel="noopener">YouTube ${icon('external')}</a></div>
+      <div class="card-head"><h3>Guided video</h3></div>
       <button class="video" data-action="play-video" style="background-image:url('https://i.ytimg.com/vi/${p.video}/hqdefault.jpg')" aria-label="Play guided video">
-        <span class="play">${icon('play')}</span><span class="cap">Play alongside the timer</span>
+        <span class="play">${icon('play')}</span><span class="cap">Play here, alongside the timer</span>
       </button>
+      <div class="video-actions">
+        <a class="btn glass" href="youtube://www.youtube.com/watch?v=${p.video}">${icon('external')}YouTube app</a>
+        <a class="btn glass" href="https://www.youtube.com/watch?v=${p.video}" target="_blank" rel="noopener">${icon('external')}In browser</a>
+      </div>
+      <p class="muted small" style="margin:10px 2px 0">If the video won't play here, open it in the YouTube app. The timer keeps running while you're away.</p>
     </section>` : '';
 
   sheet.style.cssText = gradStyle(p);
@@ -828,8 +833,8 @@ const actions = {
   health: (el) => sendToHealth(el.dataset.id),
   'play-video': (el) => {
     const id = P[T.id].video;
-    el.outerHTML = `<div class="video"><iframe src="https://www.youtube.com/embed/${id}?playsinline=1&rel=0&autoplay=1" title="${esc(P[T.id].title)} guide"
-      allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+    el.outerHTML = `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${id}?playsinline=1&rel=0&origin=${encodeURIComponent(location.origin)}" title="${esc(P[T.id].title)} guide"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
   },
   'show-all': () => { showAllHistory = true; render(); },
   manual: openManual,
@@ -911,16 +916,45 @@ document.addEventListener('visibilitychange', () => {
 
 // ---------- Boot ----------
 
-render();
-if (db.active && P[db.active.id]) {
-  T = db.active;
-  showSheet();
-  tick();
-} else if (db.active) {
+// If anything goes wrong, show a way out instead of a blank or looping screen.
+function showRecovery(err) {
+  if (document.querySelector('.recover')) return;
+  const box = document.createElement('div');
+  box.className = 'recover';
+  box.innerHTML = `<h2>Something went wrong</h2><p>Your sessions are safe. Tap below to reload.</p>
+    <button class="btn primary lg" id="recover-btn">Reload Sadhana</button>
+    <p class="small" style="opacity:.5">${esc(String(err && err.message || err || '')).slice(0, 160)}</p>`;
+  document.body.appendChild(box);
+  document.getElementById('recover-btn').onclick = () => {
+    try { db.active = null; save(); } catch { /* ignore */ }
+    location.reload();
+  };
+}
+window.addEventListener('error', (e) => showRecovery(e.error || e.message));
+window.addEventListener('unhandledrejection', (e) => e.preventDefault()); // e.g. audio or wake lock refused: harmless
+
+function boot() {
+  render();
+  const a = db.active;
+  const validTimer = a && P[a.id] && Array.isArray(a.queue) && a.queue.every((id) => P[id]) && Number.isFinite(a.duration) && a.duration > 0;
+  if (validTimer) {
+    T = a;
+    showSheet();
+    tick();
+  } else if (a) {
+    db.active = null;
+    save();
+  }
+}
+try {
+  boot();
+} catch (err) {
+  // A saved timer in a bad state must never stop the app opening.
   db.active = null;
   save();
+  try { render(); } catch (e) { showRecovery(e); }
 }
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then((reg) => reg.update()).catch(() => {});
 }

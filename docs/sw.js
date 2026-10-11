@@ -1,5 +1,6 @@
-// Offline support: app shell is served stale-while-revalidate; fonts are cached on first use.
-const CACHE = 'sadhana-v1';
+// Offline support: the app shell is network-first (so updates arrive immediately) with a cache
+// fallback offline; fonts are cache-first.
+const CACHE = 'sadhana-v2';
 const SHELL = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icons/apple-touch-icon.png', './icons/icon-192.png', './icons/icon-512.png',
@@ -28,13 +29,20 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(request, { ignoreSearch: isShell });
-      const network = fetch(request)
+      const network = () => fetch(request)
         .then((response) => {
           if (response.ok || response.type === 'opaque') cache.put(request, response.clone());
           return response;
         })
         .catch(() => cached);
-      return isFont ? cached || network : cached ? (event.waitUntil(network), cached) : network;
+      if (isFont) return cached || network();
+      try {
+        const response = await fetch(request);
+        if (response.ok) cache.put(request, response.clone());
+        return response;
+      } catch {
+        return cached || (await cache.match('./index.html')) || Response.error();
+      }
     })
   );
 });
